@@ -49,7 +49,7 @@ class StartApp extends StatelessWidget {
                 },
                 destinations: const [
                   NavigationDestination(
-                    icon: Icon(Icons.home_max_sharp, color: Colors.black),
+                    icon: Icon(Icons.home_filled, color: Colors.black),
                     label: 'Главная',
                   ),
                   NavigationDestination(
@@ -91,6 +91,7 @@ class StartApp extends StatelessWidget {
 
 int _calculateSelectedIndex(GoRouterState state) {
   final location = state.matchedLocation;
+  if (location.startsWith('/profile')) return 2;
   if (location.startsWith('/scenario')) return 1;
   return 0;
 }

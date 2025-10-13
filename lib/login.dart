@@ -86,7 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   child: const Icon(
-                    Icons.safety_divider,
+                    Icons.safety_check_rounded,
                     size: 50,
                     color: Color.fromARGB(255, 255, 35, 49),
                   ),
