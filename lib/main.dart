@@ -8,18 +8,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 
-Future<void> fetchUsers() async {
-  final response = await http.get(Uri.parse("https://mindmate-backend-1we1.onrender.com/users"));
-  if (response.statusCode == 200) {
-    final data = jsonDecode(response.body);
-    print(data);
-  } else {
-    throw Exception("Ошибка загрузки пользователей");
-  }
-}
+
 void main() {
   runApp(const StartApp());
-  fetchUsers();
 }
 
 
@@ -54,42 +45,48 @@ class StartApp extends StatelessWidget {
                     case 0:
                       context.go('/home');
                       break;
+                    case 1:
+                      context.go('/generate');
+                      break;
+                    case 2:
+                      context.go('/courses');
+                      break;
+                    case 3:
+                      context.go('/profile');
+                      break;
                   }
                 },
                 destinations: const [
                   NavigationDestination(icon: Icon(Icons.home, color: Colors.black), label: 'Главная',),
-                  // NavigationDestination(icon: Icon(Icons.auto_awesome_outlined, color: Colors.black), label: 'Создать'),
-                  // NavigationDestination(icon: Icon(Icons.book_online_outlined, color: Colors.black), label: 'Курсы'),
-                  // NavigationDestination(icon: Icon(Icons.person, color: Colors.black), label: 'Профиль'),
+                  NavigationDestination(icon: Icon(Icons.auto_awesome_outlined, color: Colors.black), label: 'Создать'),
+                  NavigationDestination(icon: Icon(Icons.book_online_outlined, color: Colors.black), label: 'Курсы'),
+                  NavigationDestination(icon: Icon(Icons.person, color: Colors.black), label: 'Профиль'),
                 ],
               ),
             );
           },
           routes: [
-            // GoRoute(
-            //   path: '/course/:id',
-            //   builder: (context, state) {
-            //     final id = state.pathParameters['id']!;
-            //     return CourseDetailScreen(courseId: id);
-            //   },
-            // ),
+            GoRoute(
+              path: '/course/:id',
+              builder: (context, state) => const HomeScreen(),
+            ),
 
             GoRoute(
               path: '/home',
               builder: (context, state) => const HomeScreen(),
             ),
-            // GoRoute(
-            //   path: '/generate',
-            //   builder: (context, state) => GenerateScreen(),
-            // ),
-            // GoRoute(
-            //   path: '/courses',
-            //   builder: (context, state) => CoursesScreen(),
-            // ),
-            // GoRoute(
-            //   path: '/profile',
-            //   builder: (context, state) => const ProfileScreen(),
-            // ),
+            GoRoute(
+              path: '/generate',
+              builder: (context, state) => const HomeScreen(),
+            ),
+            GoRoute(
+              path: '/courses',
+              builder: (context, state) => const HomeScreen(),
+            ),
+            GoRoute(
+              path: '/profile',
+              builder: (context, state) => const HomeScreen(),
+            ),
           ],
         ),
       ],
