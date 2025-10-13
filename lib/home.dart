@@ -1,4 +1,6 @@
+import 'package:diplomka/scenario.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -30,17 +32,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.indigo,
+      backgroundColor: const Color.fromARGB(255, 255, 35, 49),
       appBar: AppBar(
         title: const Text(
-          'Главная',
+          'Тренажёр ЧС',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: Colors.white,
             fontSize: 22,
           ),
         ),
-        backgroundColor: Colors.indigo,
+        backgroundColor: const Color.fromARGB(255, 255, 35, 49),
         elevation: 0,
         centerTitle: true,
       ),
@@ -52,108 +54,47 @@ class _HomeScreenState extends State<HomeScreen> {
           duration: const Duration(milliseconds: 800),
           curve: Curves.easeOut,
           child: SingleChildScrollView(
-            child: Column(
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      _animatedCard(
-                        delay: 0,
-                        child: _mainCard(),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  _mainCard(),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () {
+                      context.go("/scenario");
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color.fromARGB(255, 255, 35, 49),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 16,
                       ),
-                      const SizedBox(height: 8),
-                      _animatedCard(
-                        delay: 200,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _buildFeatureCard(
-                                icon: Icons.school,
-                                title: "Курсы",
-                                subtitle: "Изучай новое",
-                                color: Colors.blue,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: _buildFeatureCard(
-                                icon: Icons.analytics,
-                                title: "Прогресс",
-                                subtitle: "Отслеживай успехи",
-                                color: Colors.green,
-                              ),
-                            ),
-                          ],
-                        ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      const SizedBox(height: 16),
-                      _animatedCard(
-                        delay: 400,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _buildFeatureCard(
-                                icon: Icons.schedule,
-                                title: "Планы",
-                                subtitle: "Планируй время",
-                                color: Colors.orange,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: _buildFeatureCard(
-                                icon: Icons.tips_and_updates,
-                                title: "Советы",
-                                subtitle: "Умные подсказки",
-                                color: Colors.purple,
-                              ),
-                            ),
-                          ],
-                        ),
+                    ),
+                    child: const Text(
+                      "Сгенерировать сценарий",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.all(24),
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.2),
-                      width: 1,
                     ),
                   ),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.emoji_events, size: 40, color: Colors.white),
-                      const SizedBox(height: 16),
-                      const Text(
-                        "Начни свой путь к знаниям уже сегодня!",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Каждый шаг приближает тебя к цели",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white.withOpacity(0.8),
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 24),
+                  Text(
+                    "Обучайся правильным действиям при чрезвычайных ситуациях с помощью ИИ.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white.withOpacity(0.9),
+                      height: 1.5,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -161,36 +102,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Анимация появления каждого блока с задержкой
-  Widget _animatedCard({required Widget child, required int delay}) {
-    return TweenAnimationBuilder(
-      tween: Tween<double>(begin: 30, end: 0),
-      duration: const Duration(milliseconds: 600),
-      curve: Curves.easeOut,
-      key: ValueKey(Duration(milliseconds: delay)),
-      builder: (context, double value, _) {
-        return Transform.translate(
-          offset: Offset(0, value),
-          child: Opacity(
-            opacity: 1 - (value / 30),
-            child: child,
-          ),
-        );
-      },
-    );
-  }
-
   Widget _mainCard() {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
-            spreadRadius: 0,
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -205,84 +125,38 @@ class _HomeScreenState extends State<HomeScreen> {
               height: 80,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Colors.indigo, Colors.indigo.shade300],
+                  colors: [
+                    const Color.fromARGB(255, 255, 35, 49),
+                    const Color.fromARGB(255, 255, 35, 49),
+                  ],
                 ),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(Icons.psychology, size: 40, color: Colors.white),
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                size: 40,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(height: 24),
             const Text(
-              "УЧИСЬ БЫСТРЕЕ",
+              "Интерактивный тренажёр ЧС",
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 24,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: Colors.indigo,
-                letterSpacing: 1.2,
+                color: Color.fromARGB(255, 255, 35, 49),
+                letterSpacing: 0.5,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             const Text(
-              "ИИ поможет организовать твоё обучение и сделать его более эффективным",
+              "Отрабатывай действия при пожаре, землетрясении, наводнении и других чрезвычайных ситуациях. Всё в интерактивной форме.",
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
+              style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildFeatureCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            spreadRadius: 0,
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            textAlign: TextAlign.center,
-          ),
-        ],
       ),
     );
   }

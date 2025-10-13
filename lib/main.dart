@@ -3,17 +3,12 @@ import 'package:go_router/go_router.dart';
 import 'login.dart';
 import 'register.dart';
 import 'home.dart';
-
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-
-
+import 'scenario.dart';
+import 'profile_page.dart';
 
 void main() {
   runApp(const StartApp());
 }
-
-
 
 class StartApp extends StatelessWidget {
   const StartApp({super.key});
@@ -31,14 +26,13 @@ class StartApp extends StatelessWidget {
           path: '/register',
           builder: (context, state) => const RegistrationScreen(),
         ),
-
         ShellRoute(
           builder: (context, state, child) {
             return Scaffold(
               body: child,
               bottomNavigationBar: NavigationBar(
                 backgroundColor: Colors.white,
-                indicatorColor: Colors.indigoAccent,
+                indicatorColor: const Color.fromARGB(255, 255, 35, 49),
                 selectedIndex: _calculateSelectedIndex(state),
                 onDestinationSelected: (index) {
                   switch (index) {
@@ -46,46 +40,42 @@ class StartApp extends StatelessWidget {
                       context.go('/home');
                       break;
                     case 1:
-                      context.go('/generate');
+                      context.go('/scenario');
                       break;
                     case 2:
-                      context.go('/courses');
-                      break;
-                    case 3:
                       context.go('/profile');
                       break;
                   }
                 },
                 destinations: const [
-                  NavigationDestination(icon: Icon(Icons.home, color: Colors.black), label: 'Главная',),
-                  NavigationDestination(icon: Icon(Icons.auto_awesome_outlined, color: Colors.black), label: 'Создать'),
-                  NavigationDestination(icon: Icon(Icons.book_online_outlined, color: Colors.black), label: 'Курсы'),
-                  NavigationDestination(icon: Icon(Icons.person, color: Colors.black), label: 'Профиль'),
+                  NavigationDestination(
+                    icon: Icon(Icons.home_max_sharp, color: Colors.black),
+                    label: 'Главная',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.safety_check, color: Colors.black),
+                    label: 'Сценарий',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.person, color: Colors.black),
+                    label: 'Профиль',
+                  ),
                 ],
               ),
             );
           },
           routes: [
             GoRoute(
-              path: '/course/:id',
-              builder: (context, state) => const HomeScreen(),
-            ),
-
-            GoRoute(
               path: '/home',
               builder: (context, state) => const HomeScreen(),
             ),
             GoRoute(
-              path: '/generate',
-              builder: (context, state) => const HomeScreen(),
-            ),
-            GoRoute(
-              path: '/courses',
-              builder: (context, state) => const HomeScreen(),
+              path: '/scenario',
+              builder: (context, state) => const ScenarioScreen(),
             ),
             GoRoute(
               path: '/profile',
-              builder: (context, state) => const HomeScreen(),
+              builder: (context, state) => const ProfileScreen(),
             ),
           ],
         ),
@@ -101,8 +91,6 @@ class StartApp extends StatelessWidget {
 
 int _calculateSelectedIndex(GoRouterState state) {
   final location = state.matchedLocation;
-  if (location.startsWith('/profile')) return 3;
-  if (location.startsWith('/courses')) return 2;
-  if (location.startsWith('/generate')) return 1;
+  if (location.startsWith('/scenario')) return 1;
   return 0;
 }

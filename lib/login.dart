@@ -31,8 +31,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (value == null || value.trim().isEmpty) return 'Введите email';
     final email = value.trim();
     final emailRegExp = RegExp(
-        r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}"
-        r"[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$");
+      r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}"
+      r"[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
+    );
     if (!emailRegExp.hasMatch(email)) return 'Некорректный email';
     return null;
   }
@@ -55,15 +56,14 @@ class _LoginScreenState extends State<LoginScreen> {
     return eErr == null && pErr == null;
   }
 
-Future<void> _login() async {
+  Future<void> _login() async {
     context.go('/home');
-}
-
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.indigo,
+      backgroundColor: const Color.fromARGB(255, 255, 35, 49),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -86,16 +86,16 @@ Future<void> _login() async {
                     ],
                   ),
                   child: const Icon(
-                    Icons.school,
+                    Icons.safety_divider,
                     size: 50,
-                    color: Colors.indigo,
+                    color: Color.fromARGB(255, 255, 35, 49),
                   ),
                 ),
-                
+
                 const SizedBox(height: 32),
-                
+
                 const Text(
-                  "MindMate",
+                  "SafeUp",
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -110,9 +110,9 @@ Future<void> _login() async {
                     color: Colors.white.withOpacity(0.8),
                   ),
                 ),
-                
+
                 const SizedBox(height: 40),
-                
+
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -134,10 +134,14 @@ Future<void> _login() async {
                           keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
                           onChanged: (_) {
-                            if (emailError != null) setState(() => emailError = null);
+                            if (emailError != null)
+                              setState(() => emailError = null);
                           },
                           decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.email_outlined, color: Colors.indigo),
+                            prefixIcon: const Icon(
+                              Icons.email_outlined,
+                              color: Color.fromARGB(255, 255, 35, 49),
+                            ),
                             labelText: "Email",
                             errorText: emailError,
                             filled: true,
@@ -152,27 +156,37 @@ Future<void> _login() async {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Colors.indigo, width: 2),
+                              borderSide: const BorderSide(
+                                color: Color.fromARGB(255, 255, 35, 49),
+                                width: 2,
+                              ),
                             ),
                             errorBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Colors.red, width: 2),
+                              borderSide: const BorderSide(
+                                color: Colors.red,
+                                width: 2,
+                              ),
                             ),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 16),
-                        
+
                         TextField(
                           controller: passwordController,
                           obscureText: _obscurePassword,
                           textInputAction: TextInputAction.done,
                           onChanged: (_) {
-                            if (passwordError != null) setState(() => passwordError = null);
+                            if (passwordError != null)
+                              setState(() => passwordError = null);
                           },
                           onSubmitted: (_) => _login(),
                           decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.lock_outlined, color: Colors.indigo),
+                            prefixIcon: const Icon(
+                              Icons.lock_outlined,
+                              color: Color.fromARGB(255, 255, 35, 49),
+                            ),
                             labelText: "Пароль",
                             errorText: passwordError,
                             filled: true,
@@ -187,15 +201,23 @@ Future<void> _login() async {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Colors.indigo, width: 2),
+                              borderSide: const BorderSide(
+                                color: Color.fromARGB(255, 255, 35, 49),
+                                width: 2,
+                              ),
                             ),
                             errorBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Colors.red, width: 2),
+                              borderSide: const BorderSide(
+                                color: Colors.red,
+                                width: 2,
+                              ),
                             ),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                _obscurePassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
                                 color: Colors.grey[600],
                               ),
                               onPressed: () {
@@ -206,15 +228,20 @@ Future<void> _login() async {
                             ),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 24),
-                        
+
                         SizedBox(
                           width: double.infinity,
                           height: 56,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.indigo,
+                              backgroundColor: const Color.fromARGB(
+                                255,
+                                255,
+                                35,
+                                49,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
                               ),
@@ -227,7 +254,9 @@ Future<void> _login() async {
                                     height: 24,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.5,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
                                     ),
                                   )
                                 : const Text(
@@ -240,9 +269,9 @@ Future<void> _login() async {
                                   ),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 16),
-                        
+
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -258,12 +287,14 @@ Future<void> _login() async {
                                 context.push('/register');
                               },
                               style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
                               ),
                               child: const Text(
                                 "Зарегистрироваться",
                                 style: TextStyle(
-                                  color: Colors.indigo,
+                                  color: Color.fromARGB(255, 255, 35, 49),
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                 ),

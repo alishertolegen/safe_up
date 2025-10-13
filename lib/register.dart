@@ -46,8 +46,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (value == null || value.trim().isEmpty) return 'Введите email';
     final email = value.trim();
     final emailRegExp = RegExp(
-        r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}"
-        r"[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$");
+      r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}"
+      r"[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
+    );
     if (!emailRegExp.hasMatch(email)) return 'Некорректный email';
     return null;
   }
@@ -82,16 +83,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     return nErr == null && eErr == null && pErr == null && cErr == null;
   }
 
-Future<void> _register(
-    BuildContext context, String name, String email, String password) async {
-  context.go("/home");
-}
-
+  Future<void> _register(
+    BuildContext context,
+    String name,
+    String email,
+    String password,
+  ) async {
+    context.go("/home");
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.indigo,
+      backgroundColor: const Color.fromARGB(255, 255, 35, 49),
       // appBar: AppBar(
       //   title: const Text(
       //     "Регистрация",
@@ -129,10 +133,10 @@ Future<void> _register(
                   child: const Icon(
                     Icons.person_add_outlined,
                     size: 45,
-                    color: Colors.indigo,
+                    color: Color.fromARGB(255, 255, 35, 49),
                   ),
                 ),
-                
+
                 const SizedBox(height: 24),
 
                 const Text(
@@ -151,7 +155,7 @@ Future<void> _register(
                     color: Colors.white.withOpacity(0.8),
                   ),
                 ),
-                
+
                 const SizedBox(height: 32),
 
                 Container(
@@ -174,10 +178,14 @@ Future<void> _register(
                           controller: nameController,
                           textInputAction: TextInputAction.next,
                           onChanged: (_) {
-                            if (nameError != null) setState(() => nameError = null);
+                            if (nameError != null)
+                              setState(() => nameError = null);
                           },
                           decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.person_outline, color: Colors.indigo),
+                            prefixIcon: const Icon(
+                              Icons.person_outline,
+                              color: Color.fromARGB(255, 255, 35, 49),
+                            ),
                             labelText: "Имя",
                             errorText: nameError,
                             filled: true,
@@ -188,26 +196,36 @@ Future<void> _register(
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Colors.indigo, width: 2),
+                              borderSide: const BorderSide(
+                                color: Color.fromARGB(255, 255, 35, 49),
+                                width: 2,
+                              ),
                             ),
                             errorBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Colors.red, width: 2),
+                              borderSide: const BorderSide(
+                                color: Colors.red,
+                                width: 2,
+                              ),
                             ),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 16),
-             
+
                         TextField(
                           controller: emailController,
                           keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
                           onChanged: (_) {
-                            if (emailError != null) setState(() => emailError = null);
+                            if (emailError != null)
+                              setState(() => emailError = null);
                           },
                           decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.email_outlined, color: Colors.indigo),
+                            prefixIcon: const Icon(
+                              Icons.email_outlined,
+                              color: Color.fromARGB(255, 255, 35, 49),
+                            ),
                             labelText: "Email",
                             errorText: emailError,
                             filled: true,
@@ -218,26 +236,36 @@ Future<void> _register(
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Colors.indigo, width: 2),
+                              borderSide: const BorderSide(
+                                color: Color.fromARGB(255, 255, 35, 49),
+                                width: 2,
+                              ),
                             ),
                             errorBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Colors.red, width: 2),
+                              borderSide: const BorderSide(
+                                color: Colors.red,
+                                width: 2,
+                              ),
                             ),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 16),
-         
+
                         TextField(
                           controller: passwordController,
                           obscureText: _obscurePassword,
                           textInputAction: TextInputAction.next,
                           onChanged: (_) {
-                            if (passwordError != null) setState(() => passwordError = null);
+                            if (passwordError != null)
+                              setState(() => passwordError = null);
                           },
                           decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.lock_outlined, color: Colors.indigo),
+                            prefixIcon: const Icon(
+                              Icons.lock_outlined,
+                              color: Color.fromARGB(255, 255, 35, 49),
+                            ),
                             labelText: "Пароль",
                             errorText: passwordError,
                             filled: true,
@@ -248,39 +276,57 @@ Future<void> _register(
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Colors.indigo, width: 2),
+                              borderSide: const BorderSide(
+                                color: Color.fromARGB(255, 255, 35, 49),
+                                width: 2,
+                              ),
                             ),
                             errorBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Colors.red, width: 2),
+                              borderSide: const BorderSide(
+                                color: Colors.red,
+                                width: 2,
+                              ),
                             ),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                _obscurePassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
                                 color: Colors.grey[600],
                               ),
                               onPressed: () {
-                                setState(() => _obscurePassword = !_obscurePassword);
+                                setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                );
                               },
                             ),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 16),
-                        
+
                         TextField(
                           controller: confirmController,
                           obscureText: _obscureConfirm,
                           textInputAction: TextInputAction.done,
                           onChanged: (_) {
-                            if (confirmError != null) setState(() => confirmError = null);
+                            if (confirmError != null)
+                              setState(() => confirmError = null);
                           },
                           onSubmitted: (_) {
-                            _register(context, nameController.text, emailController.text,
-                                passwordController.text);
+                            _register(
+                              context,
+                              nameController.text,
+                              emailController.text,
+                              passwordController.text,
+                            );
                           },
                           decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.lock_outlined, color: Colors.indigo),
+                            prefixIcon: const Icon(
+                              Icons.lock_outlined,
+                              color: Color.fromARGB(255, 255, 35, 49),
+                            ),
                             labelText: "Подтвердите пароль",
                             errorText: confirmError,
                             filled: true,
@@ -291,24 +337,34 @@ Future<void> _register(
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Colors.indigo, width: 2),
+                              borderSide: const BorderSide(
+                                color: Color.fromARGB(255, 255, 35, 49),
+                                width: 2,
+                              ),
                             ),
                             errorBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: Colors.red, width: 2),
+                              borderSide: const BorderSide(
+                                color: Colors.red,
+                                width: 2,
+                              ),
                             ),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                _obscureConfirm
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
                                 color: Colors.grey[600],
                               ),
                               onPressed: () {
-                                setState(() => _obscureConfirm = !_obscureConfirm);
+                                setState(
+                                  () => _obscureConfirm = !_obscureConfirm,
+                                );
                               },
                             ),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 24),
 
                         SizedBox(
@@ -316,7 +372,12 @@ Future<void> _register(
                           height: 56,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.indigo,
+                              backgroundColor: const Color.fromARGB(
+                                255,
+                                255,
+                                35,
+                                49,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
                               ),
@@ -338,7 +399,9 @@ Future<void> _register(
                                     height: 24,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.5,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
                                     ),
                                   )
                                 : const Text(
@@ -351,7 +414,7 @@ Future<void> _register(
                                   ),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 16),
 
                         Row(
@@ -369,12 +432,14 @@ Future<void> _register(
                                 Navigator.pop(context);
                               },
                               style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
                               ),
                               child: const Text(
                                 "Войти",
                                 style: TextStyle(
-                                  color: Colors.indigo,
+                                  color: Color.fromARGB(255, 255, 35, 49),
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                 ),
