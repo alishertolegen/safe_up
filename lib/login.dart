@@ -56,9 +56,61 @@ class _LoginScreenState extends State<LoginScreen> {
     return eErr == null && pErr == null;
   }
 
-  Future<void> _login() async {
-    context.go('/home');
+Future<void> _login() async {
+  if (!_validateFields()) return;
+
+  setState(() => _isLoading = true);
+
+  try {
+    final url = Uri.parse("http://localhost:5000/login"); 
+
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "email": emailController.text.trim(),
+        "password": passwordController.text.trim(),
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString("userEmail", emailController.text.trim());
+      if (data["token"] != null) {
+        await prefs.setString("token", data["token"]);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Вход выполнен успешно!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+        context.go('/home');
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(data["message"] ?? "Неверный логин или пароль"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Ошибка соединения: $e"),
+        backgroundColor: Colors.red,
+      ),
+    );
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
+}
+
 
   @override
   Widget build(BuildContext context) {

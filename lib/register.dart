@@ -83,14 +83,65 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     return nErr == null && eErr == null && pErr == null && cErr == null;
   }
 
-  Future<void> _register(
-    BuildContext context,
-    String name,
-    String email,
-    String password,
-  ) async {
-    context.go("/home");
+Future<void> _register(
+  BuildContext context,
+  String name,
+  String email,
+  String password,
+) async {
+  if (!_validateAll()) return;
+
+  setState(() => _isLoading = true);
+
+  try {
+    final url = Uri.parse("http://localhost:5000/register"); 
+
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "username": name,
+        "email": email,
+        "password": password,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 201) {
+      // регистрация успешна
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString("userEmail", email);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Регистрация успешна!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+        context.go("/home");
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(data["message"] ?? "Ошибка регистрации"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Ошибка соединения: $e"),
+        backgroundColor: Colors.red,
+      ),
+    );
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
+}
+
 
   @override
   Widget build(BuildContext context) {
