@@ -95,15 +95,16 @@ Future<void> _login() async {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(data["message"] ?? "Неверный логин или пароль"),
-          backgroundColor: Colors.red,
+          backgroundColor: const Color.fromARGB(255, 177, 42, 32),
         ),
       );
     }
   } catch (e) {
+    // ignore: use_build_context_synchronously
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text("Ошибка соединения: $e"),
-        backgroundColor: Colors.red,
+        backgroundColor: const Color.fromARGB(255, 177, 42, 32),
       ),
     );
   } finally {

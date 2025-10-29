@@ -1,4 +1,3 @@
-import 'package:diplomka/scenario.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -32,17 +31,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 255, 35, 49),
+      backgroundColor: const Color.fromARGB(255, 189, 20, 31),
       appBar: AppBar(
         title: const Text(
           'Тренажёр ЧС',
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: Colors.black,
             fontSize: 22,
           ),
         ),
-        backgroundColor: const Color.fromARGB(255, 255, 35, 49),
+        backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
       ),

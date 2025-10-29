@@ -84,7 +84,7 @@ class StartApp extends StatelessWidget {
 
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
-      routerConfig: router,
+      routerConfig: router
     );
   }
 }

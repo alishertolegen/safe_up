@@ -126,7 +126,7 @@ Future<void> _register(
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(data["message"] ?? "Ошибка регистрации"),
-          backgroundColor: Colors.red,
+          backgroundColor: const Color.fromARGB(255, 177, 42, 32),
         ),
       );
     }
