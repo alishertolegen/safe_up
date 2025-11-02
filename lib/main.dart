@@ -31,6 +31,20 @@ class StartApp extends StatelessWidget {
           path: '/register',
           builder: (context, state) => const RegistrationScreen(),
         ),
+            GoRoute(
+      path: '/forgot-password',
+      builder: (context, state) => const ForgotPasswordScreen(),
+    ),
+    GoRoute(
+      path: '/reset-password',
+      builder: (context, state) {
+        String? initialEmail;
+        if (state.extra != null && state.extra is Map && (state.extra as Map).containsKey('email')) {
+          initialEmail = (state.extra as Map)['email'] as String?;
+        }
+        return ResetPasswordScreen(initialEmail: initialEmail);
+      },
+    ),
         ShellRoute(
           builder: (context, state, child) {
             return Scaffold(
@@ -98,22 +112,7 @@ class StartApp extends StatelessWidget {
               builder: (context, state) => const ProfileEditScreen(),
             ),
 
-    GoRoute(
-      path: '/forgot-password',
-      builder: (context, state) => const ForgotPasswordScreen(),
-    ),
 
-    // Здесь: если state.extra — ожидаем Map с 'email'
-    GoRoute(
-      path: '/reset-password',
-      builder: (context, state) {
-        String? initialEmail;
-        if (state.extra != null && state.extra is Map && (state.extra as Map).containsKey('email')) {
-          initialEmail = (state.extra as Map)['email'] as String?;
-        }
-        return ResetPasswordScreen(initialEmail: initialEmail);
-      },
-    ),
           ],
         ),
       ],
