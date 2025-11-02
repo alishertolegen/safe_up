@@ -8,6 +8,8 @@ import 'profile_page.dart';
 import 'create_training_screen.dart';
 import 'my_trainings_screen.dart';
 import 'ProfileEditScreen.dart';
+import 'reset_password_screen.dart';
+import 'forgot_password_screen.dart';
 
 void main() {
   runApp(const StartApp());
@@ -95,6 +97,23 @@ class StartApp extends StatelessWidget {
               path: '/profile/edit',
               builder: (context, state) => const ProfileEditScreen(),
             ),
+
+    GoRoute(
+      path: '/forgot-password',
+      builder: (context, state) => const ForgotPasswordScreen(),
+    ),
+
+    // Здесь: если state.extra — ожидаем Map с 'email'
+    GoRoute(
+      path: '/reset-password',
+      builder: (context, state) {
+        String? initialEmail;
+        if (state.extra != null && state.extra is Map && (state.extra as Map).containsKey('email')) {
+          initialEmail = (state.extra as Map)['email'] as String?;
+        }
+        return ResetPasswordScreen(initialEmail: initialEmail);
+      },
+    ),
           ],
         ),
       ],

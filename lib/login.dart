@@ -340,9 +340,7 @@ Future<void> _login() async {
                                 context.push('/register');
                               },
                               style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
                               ),
                               child: const Text(
                                 "Зарегистрироваться",
@@ -354,6 +352,28 @@ Future<void> _login() async {
                               ),
                             ),
                           ],
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        // NEW: forgot password
+                        Align(
+                          alignment: Alignment.center,
+                          child: TextButton(
+                            onPressed: () {
+                              // open forgot password screen
+                              // optionally pass current email value
+                              context.push('/forgot-password', extra: {'email': emailController.text.trim()});
+                            },
+                            child: Text(
+                              "Забыли пароль?",
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 14,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ),
