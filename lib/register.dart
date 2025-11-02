@@ -133,49 +133,92 @@ Future<void> _register(
 
     // --- обработка ошибок сервера ---
     String serverMessage = (data is Map && data["message"] != null) ? data["message"].toString() : "Ошибка регистрации";
-    List<dynamic>? serverErrors = (data is Map && data["errors"] is List) ? List.from(data["errors"]) : null;
+    List<dynamic>? serverErrorsRaw = (data is Map && data["errors"] is List) ? List.from(data["errors"]) : null;
 
-    // Сбросить прежние ошибки
-    setState(() {
-      nameError = null;
-      emailError = null;
-      passwordError = null;
-      confirmError = null;
-
-      if (serverErrors != null && serverErrors.isNotEmpty) {
-        // Показываем все причины под полем пароля (или можно разбирать по полям, если бекенд вернёт ключи)
-        passwordError = serverErrors.join('\n');
-      } else {
-        // Попытка угадать, к какому полю относится сообщение
-        final msgLower = serverMessage.toLowerCase();
-        if (msgLower.contains('email') || msgLower.contains('существ')) {
-          emailError = serverMessage;
-        } else if (msgLower.contains('пароль')) {
-          passwordError = serverMessage;
-        } else if (msgLower.contains('имя') || msgLower.contains('username')) {
-          nameError = serverMessage;
-        } else {
-          // Общая ошибка — покажем в Snackbar
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(serverMessage),
-              backgroundColor: const Color.fromARGB(255, 177, 42, 32),
-            ),
-          );
-        }
+    // Нормализуем в список строк
+    List<String> serverErrors = [];
+    if (serverErrorsRaw != null) {
+      for (var e in serverErrorsRaw) {
+        if (e == null) continue;
+        serverErrors.add(e.toString());
       }
+    }
+
+    // Если нет массива, но есть message — попробуем поместить message в обработку
+    if (serverErrors.isEmpty && serverMessage.isNotEmpty) {
+      serverErrors.add(serverMessage);
+    }
+
+    // Классификация ошибок по полям
+    final List<String> emailMsgs = [];
+    final List<String> passwordMsgs = [];
+    final List<String> nameMsgs = [];
+    final List<String> otherMsgs = [];
+
+    for (final raw in serverErrors) {
+      final s = raw.trim();
+      final low = s.toLowerCase();
+
+      // Правила для email
+      if (low.contains('email') ||
+          low.contains('почт') ||
+          low.contains('@') ||
+          low.contains('домен') ||
+          low.contains('локал') ||
+          low.contains('некорректн') ||
+          low.contains('формат')) {
+        emailMsgs.add(s);
+        continue;
+      }
+
+      // Правила для пароля
+      if (low.contains('пароль') ||
+          low.contains('заглав') ||
+          low.contains('строч') ||
+          low.contains('цифр') ||
+          low.contains('специаль') ||
+          low.contains('минимум') ||
+          low.contains('символ') ||
+          low.contains('последовательн') ||
+          low.contains('не должен содержать')) {
+        passwordMsgs.add(s);
+        continue;
+      }
+
+      // Правила для имени/username
+      if (low.contains('имя') || low.contains('username') || low.contains('ник')) {
+        nameMsgs.add(s);
+        continue;
+      }
+
+      // Остальное
+      otherMsgs.add(s);
+    }
+
+    // Обновим состояние и присвоим ошибки соответствующим полям
+    setState(() {
+      nameError = nameMsgs.isNotEmpty ? nameMsgs.join('\n') : null;
+      emailError = emailMsgs.isNotEmpty ? emailMsgs.join('\n') : null;
+      passwordError = passwordMsgs.isNotEmpty ? passwordMsgs.join('\n') : null;
+      confirmError = null; // обычно сервер не возвращает ошибку подтверждения
     });
 
-    // Если есть ошибки (массив или поле), показать краткий SnackBar-резюме
-    final sbText = (serverErrors != null && serverErrors.isNotEmpty)
-        ? serverErrors.join('; ')
-        : serverMessage;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(sbText),
-        backgroundColor: const Color.fromARGB(255, 177, 42, 32),
-      ),
-    );
+    // Показать сводный SnackBar для остальных или всех ошибок
+    final List<String> sbList = [];
+    if (emailMsgs.isNotEmpty) sbList.addAll(emailMsgs);
+    if (passwordMsgs.isNotEmpty) sbList.addAll(passwordMsgs);
+    if (nameMsgs.isNotEmpty) sbList.addAll(nameMsgs);
+    if (otherMsgs.isNotEmpty) sbList.addAll(otherMsgs);
+
+    final sbText = sbList.isNotEmpty ? sbList.join('; ') : serverMessage;
+    if (sbText.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(sbText),
+          backgroundColor: const Color.fromARGB(255, 177, 42, 32),
+        ),
+      );
+    }
   } catch (e) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

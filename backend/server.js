@@ -449,20 +449,70 @@ function validatePassword(password, { username = '', email = '' } = {}) {
 
   return errors;
 }
+// Валидация email (возвращает массив ошибок, пустой если ОК)
+function validateEmail(rawEmail) {
+  const errors = [];
+  if (!rawEmail || typeof rawEmail !== 'string') {
+    errors.push('Email обязателен.');
+    return errors;
+  }
+
+  const email = rawEmail.trim().toLowerCase();
+
+  // Общие ограничения длины (RFC допускает до 254, но для простоты — ограничим)
+  if (email.length < 5 || email.length > 254) {
+    errors.push('Email должен быть длиной от 5 до 254 символов.');
+  }
+
+  // Простая и надёжная проверка формата (подойдёт для большинства случаев)
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRe.test(email)) {
+    errors.push('Некорректный формат email.');
+  }
+
+  // Дополнительные проверки локальной части и домена
+  const parts = email.split('@');
+  if (parts.length !== 2 || parts[0].length === 0) {
+    errors.push('Локальная часть (до @) некорректна.');
+  }
+  if (parts[1].length === 0) {
+    errors.push('Доменная часть (после @) некорректна.');
+  }
+
+  return errors;
+}
 
 app.post("/register", async (req, res) => {
   try {
     const { username = '', email, password } = req.body || {};
 
+    // Базовые обязательные поля
     if (!email || !password) {
-      return res.status(400).json({ message: "Email и пароль обязательны" });
+      const errs = [];
+      if (!email) errs.push('Email обязателен.');
+      if (!password) errs.push('Пароль обязателен.');
+      return res.status(400).json({ message: "Отсутствуют обязательные поля", errors: errs });
     }
 
     const emailNorm = String(email).toLowerCase().trim();
 
-    // Проверка на существующего пользователя
+    // Валидация email
+    const emailErrors = validateEmail(emailNorm);
+    if (emailErrors.length > 0) {
+      return res.status(400).json({
+        message: "Email не проходит валидацию",
+        errors: emailErrors
+      });
+    }
+
+    // Проверка на существующего пользователя (после нормализации и валидации)
     const existing = await User.findOne({ email: emailNorm });
-    if (existing) return res.status(400).json({ message: "Пользователь уже существует" });
+    if (existing) {
+      return res.status(400).json({
+        message: "Пользователь уже существует",
+        errors: ['Пользователь с таким email уже зарегистрирован.']
+      });
+    }
 
     // Валидация пароля по требованиям
     const pwErrors = validatePassword(password, { username, email: emailNorm });
@@ -495,11 +545,12 @@ app.post("/register", async (req, res) => {
     console.error("Register error:", err);
     // Обработка ошибки дубликата на уровне БД (без гонки)
     if (err && err.code === 11000 && err.keyPattern && err.keyPattern.email) {
-      return res.status(400).json({ message: "Пользователь с таким email уже существует" });
+      return res.status(400).json({ message: "Пользователь с таким email уже существует", errors: ['Пользователь с таким email уже существует'] });
     }
     res.status(500).json({ message: "Ошибка сервера" });
   }
 });
+
 // --- Конец патча ---
 
 
