@@ -7,6 +7,7 @@ import 'home.dart';
 import 'profile_page.dart';
 import 'create_training_screen.dart';
 import 'my_trainings_screen.dart';
+import 'ProfileEditScreen.dart';
 
 void main() {
   runApp(const StartApp());
@@ -89,6 +90,10 @@ class StartApp extends StatelessWidget {
             GoRoute(
               path: '/profile',
               builder: (context, state) => const ProfileScreen(),
+            ),
+            GoRoute(
+              path: '/profile/edit',
+              builder: (context, state) => const ProfileEditScreen(),
             ),
           ],
         ),

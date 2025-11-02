@@ -19,10 +19,25 @@ mongoose.connect(process.env.MONGO_URI)
  * Schemas
  */
 const userSchema = new mongoose.Schema({
-  username: String,
-  email: { type: String, unique: true, index: true },
-  password: String
-}, { timestamps: true });
+  username: { type: String, default: "" },
+  email: { type: String, unique: true, index: true, required: true },
+  password: { type: String, required: true }, // хранится хэш
+  avatarUrl: { type: String, default: "" }, // ссылка на аватар
+  stats: {
+    totalAttempts: { type: Number, default: 0 },
+    successes: { type: Number, default: 0 },
+    avgScore: { type: Number, default: 0 },   // можно пересчитывать при каждой попытке
+    totalTimeSec: { type: Number, default: 0 }
+  },
+  achievements: [
+    {
+      code: String,      // машинный код бейджа, например "fire_master_1"
+      title: String,     // человекочитаемое название
+      earnedAt: Date
+    }
+  ],
+  lastActiveAt: { type: Date, default: Date.now } // обновлять при логине/действии
+}, { timestamps: true }); // createdAt / updatedAt автоматически
 
 const User = mongoose.model("User", userSchema);
 
@@ -396,8 +411,17 @@ app.post("/register", async (req, res) => {
     if (existing) return res.status(400).json({ message: "Пользователь уже существует" });
 
     const hash = await bcrypt.hash(password, 10);
-    const newUser = new User({ username, email, password: hash });
+    const newUser = new User({
+      username,
+      email,
+      password: hash,
+      avatarUrl: "",
+      stats: { totalAttempts: 0, successes: 0, avgScore: 0, totalTimeSec: 0 },
+      achievements: [],
+      lastActiveAt: new Date()
+    });
     await newUser.save();
+
 
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
     res.status(201).json({ message: "Регистрация успешна", token });
@@ -416,8 +440,10 @@ app.post("/login", async (req, res) => {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(400).json({ message: "Неверный email или пароль" });
 
+    await User.findByIdAndUpdate(user._id, { lastActiveAt: new Date() });
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
     res.json({ message: "Успешный вход", token });
+
   } catch (err) {
     res.status(500).json({ message: "Ошибка сервера" });
   }
@@ -441,6 +467,44 @@ app.get("/profile", authMiddleware, async(req, res) =>{
     res.status(500).json({message: "Ошибка при получении данных профиля"});
   }
 });
+app.patch("/profile", authMiddleware, async (req, res) => {
+  try {
+    const allowed = ["username", "avatarUrl"];
+    const updates = {};
+    for (const k of allowed) if (typeof req.body[k] !== "undefined") updates[k] = req.body[k];
+
+    const user = await User.findByIdAndUpdate(req.userId, updates, { new: true, select: "-password" });
+    if (!user) return res.status(404).json({ message: "Пользователь не найден" });
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Ошибка при обновлении профиля" });
+  }
+});
+app.post("/profile/achievements", authMiddleware, async (req, res) => {
+  try {
+    const { code, title } = req.body;
+    if (!code || !title) return res.status(400).json({ message: "Нужны code и title" });
+
+    const ach = { code, title, earnedAt: new Date() };
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: "Пользователь не найден" });
+
+    // избегаем дубликатов по code
+    if (!user.achievements.some(a => a.code === code)) {
+      user.achievements.push(ach);
+      await user.save();
+    }
+
+    const out = user.toObject();
+    delete out.password;
+    res.json(out);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Ошибка при добавлении достижения" });
+  }
+});
+
 
 /**
  * Trainings endpoints
@@ -584,9 +648,7 @@ app.delete("/trainings/:id", authMiddleware, async (req, res) => {
   }
 });
 
-/**
- * Attempt endpoint unchanged
- */
+/** Attempt endpoint — обновлённый: записывает stats в тренировку и в профиль пользователя */
 app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
   try {
     const { choices, timeSec } = req.body;
@@ -595,6 +657,7 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
     const training = await Training.findById(req.params.id);
     if (!training) return res.status(404).json({ message: "Тренировка не найдена" });
 
+    // Построим карту сцен/вариантов
     const sceneMap = new Map();
     for (const s of training.scenes) {
       const choiceMap = new Map();
@@ -631,16 +694,11 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
       });
     }
 
-    // Количество сцен в тренировке (сколько должно быть правильно отвечено)
     const totalScenes = Array.isArray(training.scenes) ? training.scenes.length : 0;
-
-    // Успех — когда число правильных ответов равно числу сцен, либо равно числу реально обработанных сцен
-    // (специфично для случая, когда клиент может отправлять не все сцены)
     const success = (correctAnswers === totalScenes) || (correctAnswers === totalScenesConsidered);
-
-    // Вернём понятное значение в ответ (назовём totalScenes, а не totalChoices)
     const totalChoices = totalScenes;
 
+    // Обновляем статистику тренировки
     const prevAttempts = training.stats.attempts || 0;
     const prevAvg = training.stats.avgTimeSec || 0;
     const newAttempts = prevAttempts + 1;
@@ -652,7 +710,38 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
 
     await training.save();
 
-    res.json({
+    // --------- Обновляем статистику пользователя ----------
+    const user = await User.findById(req.userId);
+    if (user) {
+      const uStats = user.stats || { totalAttempts: 0, successes: 0, avgScore: 0, totalTimeSec: 0 };
+      const prevUserAttempts = uStats.totalAttempts || 0;
+      const prevUserAvgScore = typeof uStats.avgScore === "number" ? uStats.avgScore : 0;
+      const newUserAttempts = prevUserAttempts + 1;
+      // Средний балл пользователя пересчитываем по totalScore (можно выбрать другую метрику)
+      const newAvgScore = prevUserAttempts === 0
+        ? totalScore
+        : ( (prevUserAvgScore * prevUserAttempts) + totalScore ) / newUserAttempts;
+      const roundedAvgScore = Math.round(newAvgScore * 100) / 100; // 2 знака
+
+      user.stats.totalAttempts = newUserAttempts;
+      user.stats.avgScore = roundedAvgScore;
+      user.stats.totalTimeSec = (uStats.totalTimeSec || 0) + (timeSec || 0);
+      if (success) user.stats.successes = (uStats.successes || 0) + 1;
+
+      // Обновляем lastActiveAt
+      user.lastActiveAt = new Date();
+
+      // Простое достижение: первая успешная попытка
+      if (success && !(user.achievements || []).some(a => a.code === 'first_success')) {
+        user.achievements = user.achievements || [];
+        user.achievements.push({ code: 'first_success', title: 'Первая успешная тренировка', earnedAt: new Date() });
+      }
+
+      await user.save();
+    }
+
+    // Ответ клиенту — с результатом и обновлённой статистикой тренировки (и опционально статистикой пользователя)
+    const response = {
       message: "Результат записан",
       result: {
         totalScore,
@@ -663,12 +752,26 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
         details
       },
       updatedStats: training.stats
-    });
+    };
+
+    // Добавим краткую статистику пользователя в ответ, если пользователь найден
+    if (user) {
+      const userSafe = {
+        id: user._id,
+        stats: user.stats,
+        achievementsCount: (user.achievements || []).length,
+        lastActiveAt: user.lastActiveAt
+      };
+      response.userStats = userSafe;
+    }
+
+    res.json(response);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Ошибка при записи попытки" });
   }
 });
+
 
 /** List trainings of the current authenticated user */
 app.get("/trainings/mine", authMiddleware, async (req, res) => {
