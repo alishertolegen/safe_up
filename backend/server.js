@@ -457,7 +457,6 @@ app.get("/trainings", async (req, res) => {
     if (q) filter.$text = { $search: q };
 
     const trainings = await Training.find(filter)
-      .select("-scenes.choices.consequenceText")
       .limit(Math.min(100, parseInt(limit)))
       .skip(parseInt(skip))
       .sort({ createdAt: -1 });
@@ -678,7 +677,6 @@ app.get("/trainings/mine", authMiddleware, async (req, res) => {
     // Можно добавить другие фильтры по необходимости
 
     const trainings = await Training.find(filter)
-      .select("-scenes.choices.consequenceText")
       .limit(Math.min(100, parseInt(limit)))
       .skip(parseInt(skip))
       .sort({ createdAt: -1 });
