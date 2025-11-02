@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import 'login.dart';
 import 'register.dart';
 import 'home.dart';
-import 'scenario.dart';
 import 'profile_page.dart';
+import 'create_training_screen.dart';
+import 'my_trainings_screen.dart';
 
 void main() {
   runApp(const StartApp());
@@ -40,9 +42,12 @@ class StartApp extends StatelessWidget {
                       context.go('/home');
                       break;
                     case 1:
-                      context.go('/scenario');
+                      context.go('/create');
                       break;
                     case 2:
+                      context.go('/mytrainings');
+                      break;
+                    case 3:
                       context.go('/profile');
                       break;
                   }
@@ -53,8 +58,12 @@ class StartApp extends StatelessWidget {
                     label: 'Главная',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.safety_check, color: Colors.black),
-                    label: 'Сценарий',
+                    icon: Icon(Icons.add_box_outlined, color: Colors.black),
+                    label: 'Создать',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.list_alt, color: Colors.black),
+                    label: 'Мои тренировки',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.person, color: Colors.black),
@@ -70,8 +79,12 @@ class StartApp extends StatelessWidget {
               builder: (context, state) => const HomeScreen(),
             ),
             GoRoute(
-              path: '/scenario',
-              builder: (context, state) => const ScenarioScreen(),
+              path: '/create',
+              builder: (context, state) => const CreateTrainingScreen(),
+            ),
+            GoRoute(
+              path: '/mytrainings',
+              builder: (context, state) => const MyTrainingsScreen(),
             ),
             GoRoute(
               path: '/profile',
@@ -84,14 +97,20 @@ class StartApp extends StatelessWidget {
 
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
-      routerConfig: router
+      title: 'Тренажёр эвакуации',
+      routerConfig: router,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.red,
+      ),
     );
   }
 }
 
 int _calculateSelectedIndex(GoRouterState state) {
   final location = state.matchedLocation;
-  if (location.startsWith('/profile')) return 2;
-  if (location.startsWith('/scenario')) return 1;
-  return 0;
+  if (location.startsWith('/profile')) return 3;
+  if (location.startsWith('/mytrainings')) return 2;
+  if (location.startsWith('/create')) return 1;
+  return 0; // /home и прочие
 }

@@ -109,9 +109,12 @@ Future<void> _register(
     final data = jsonDecode(response.body);
 
     if (response.statusCode == 201) {
-      // регистрация успешна
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString("userEmail", email);
+
+      if (data["token"] != null) {
+        await prefs.setString("token", data["token"]);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
