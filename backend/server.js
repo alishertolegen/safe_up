@@ -6,6 +6,9 @@ const jwt = require("jsonwebtoken");
 const cors = require("cors");
 require("dotenv").config();
 const axios = require("axios");
+const crypto = require("crypto");
+const nodemailer = require("nodemailer");
+
 
 const app = express();
 app.use(express.json());
@@ -36,6 +39,10 @@ const userSchema = new mongoose.Schema({
       earnedAt: Date
     }
   ],
+    // --- поля для сброса пароля ---
+  passwordResetCode: { type: String, default: null, select: false }, // хранится хеш кода (sha256)
+  passwordResetExpires: { type: Date, default: null, select: false },
+    // ---
   lastActiveAt: { type: Date, default: Date.now } // обновлять при логине/действии
 }, { timestamps: true }); // createdAt / updatedAt автоматически
 
@@ -482,6 +489,43 @@ function validateEmail(rawEmail) {
   return errors;
 }
 
+// Отправка письма с кодом сброса пароля.
+// Использует SMTP из .env (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM).
+// Если SMTP не настроен — логируем код в консоль (удобно для разработки локально).
+async function sendResetEmail(toEmail, code) {
+  const from = process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@example.com';
+  const subject = 'Код для сброса пароля';
+  const text = `Ваш код для сброса пароля: ${code}\n\nОн действителен 15 минут. Если вы не запрашивали сброс — проигнорируйте это письмо.`;
+  const html = `<p>Ваш код для сброса пароля: <b>${code}</b></p><p>Он действителен 15 минут.</p>`;
+
+  // Если SMTP переменные не заданы — логируем код в консоль (dev mode).
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.warn(`SMTP not configured — reset code for ${toEmail}: ${code}`);
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: Number(process.env.SMTP_PORT || 587) === 465, // true для 465
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
+  });
+
+  const mailOptions = {
+    from,
+    to: toEmail,
+    subject,
+    text,
+    html
+  };
+
+  await transporter.sendMail(mailOptions);
+}
+
+
 app.post("/register", async (req, res) => {
   try {
     const { username = '', email, password } = req.body || {};
@@ -571,6 +615,96 @@ app.post("/login", async (req, res) => {
     res.status(500).json({ message: "Ошибка сервера" });
   }
 });
+
+// POST /forgot-password
+// Тело: { email }
+app.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ message: "Email обязателен" });
+
+    const emailNorm = String(email).toLowerCase().trim();
+    const emailErrors = validateEmail(emailNorm);
+    if (emailErrors.length) return res.status(400).json({ message: "Некорректный email", errors: emailErrors });
+
+    const user = await User.findOne({ email: emailNorm });
+    // Для безопасности возвращаем единый ответ даже если пользователя нет.
+    if (user) {
+      // Генерация 6-значного кода крипто-безопасно
+      const code = String(crypto.randomInt(100000, 1000000)); // 100000..999999
+      const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+      const expires = new Date(Date.now() + 1000 * 60 * 15); // 15 минут
+
+      user.passwordResetCode = codeHash;
+      user.passwordResetExpires = expires;
+      await user.save();
+
+      // Попытаться отправить письмо (если почта не настроена — лог в консоль)
+      try {
+        await sendResetEmail(emailNorm, code);
+      } catch (mailErr) {
+        console.error("Ошибка отправки письма сброса:", mailErr);
+      }
+    }
+
+    // Всегда одинаковый ответ — не выдаём, существует ли email в системе
+    res.json({ message: "Если пользователь с таким email существует, на него отправлен код для сброса пароля." });
+  } catch (err) {
+    console.error("forgot-password error:", err);
+    res.status(500).json({ message: "Ошибка сервера" });
+  }
+});
+
+// POST /reset-password
+// Тело: { email, code, newPassword }
+app.post("/reset-password", async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body || {};
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({ message: "Требуются email, code и новый пароль" });
+    }
+
+    const emailNorm = String(email).toLowerCase().trim();
+    const user = await User.findOne({ email: emailNorm }).select("+passwordResetCode +passwordResetExpires +password");
+    if (!user || !user.passwordResetCode || !user.passwordResetExpires) {
+      return res.status(400).json({ message: "Неверный код или email" });
+    }
+
+    // Проверяем срок действия
+    if (user.passwordResetExpires < new Date()) {
+      return res.status(400).json({ message: "Код истёк" });
+    }
+
+    // Сравниваем хешы
+    const codeHash = crypto.createHash('sha256').update(String(code)).digest('hex');
+    if (codeHash !== user.passwordResetCode) {
+      return res.status(400).json({ message: "Неверный код или email" });
+    }
+
+    // Проверяем новый пароль
+    const pwErrors = validatePassword(newPassword, { username: user.username, email: emailNorm });
+    if (pwErrors.length > 0) {
+      return res.status(400).json({ message: "Пароль не соответствует требованиям", errors: pwErrors });
+    }
+
+    // Сохраняем новый пароль (хешируем) и очищаем поля сброса
+    const hash = await bcrypt.hash(newPassword, 10);
+    user.password = hash;
+    user.passwordResetCode = null;
+    user.passwordResetExpires = null;
+    user.lastActiveAt = new Date();
+    await user.save();
+
+    // Опционально — сразу выдаём JWT, чтобы пользователь оказался залогинен
+    const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
+
+    res.json({ message: "Пароль успешно изменён", token: jwtToken });
+  } catch (err) {
+    console.error("reset-password error:", err);
+    res.status(500).json({ message: "Ошибка сервера" });
+  }
+});
+
 
 app.get("/users", async(req, res) =>{
   try{
