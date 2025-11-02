@@ -61,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 24),
                   ElevatedButton(
                     onPressed: () {
-                      context.go("/scenario");
+                      context.go("/create");
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,

@@ -631,8 +631,15 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
       });
     }
 
-    const totalChoices = training.summaryMetrics?.totalChoices ?? training.scenes.length;
-    const success = (correctAnswers === totalChoices);
+    // Количество сцен в тренировке (сколько должно быть правильно отвечено)
+    const totalScenes = Array.isArray(training.scenes) ? training.scenes.length : 0;
+
+    // Успех — когда число правильных ответов равно числу сцен, либо равно числу реально обработанных сцен
+    // (специфично для случая, когда клиент может отправлять не все сцены)
+    const success = (correctAnswers === totalScenes) || (correctAnswers === totalScenesConsidered);
+
+    // Вернём понятное значение в ответ (назовём totalScenes, а не totalChoices)
+    const totalChoices = totalScenes;
 
     const prevAttempts = training.stats.attempts || 0;
     const prevAvg = training.stats.avgTimeSec || 0;
@@ -670,13 +677,13 @@ app.get("/trainings/mine", authMiddleware, async (req, res) => {
 
     // Базовый фильтр — только записи этого пользователя
     const filter = { createdBy: req.userId };
-
+    // const t = await Training.findById(req.params.id).populate("createdBy", "username email");
     if (type) filter.type = type;
     if (typeof isPublished !== "undefined") filter.isPublished = isPublished === "true";
     if (tag) filter.tags = tag;
     // Можно добавить другие фильтры по необходимости
 
-    const trainings = await Training.find(filter)
+    const trainings = await Training.find(filter).populate("createdBy", "username email")
       .limit(Math.min(100, parseInt(limit)))
       .skip(parseInt(skip))
       .sort({ createdAt: -1 });
