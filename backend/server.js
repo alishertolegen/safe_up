@@ -404,32 +404,104 @@ Example element:
 /**
  * Auth routes (register/login) and users/profile
  */
+function validatePassword(password, { username = '', email = '' } = {}) {
+  const errors = [];
+  if (!password || typeof password !== 'string') {
+    errors.push('Пароль обязателен.');
+    return errors;
+  }
+
+  if (password.length < 8) errors.push('Минимум 8 символов.');
+  if (!/[A-Z]/.test(password)) errors.push('Хотя бы 1 заглавная буква (A–Z).');
+  if (!/[a-z]/.test(password)) errors.push('Хотя бы 1 строчная буква (a–z).');
+  if (!/[0-9]/.test(password)) errors.push('Хотя бы 1 цифра (0–9).');
+  if (!/[!@#$%^&*()_+\-=\[\]{};:"'.,<>\/?]/.test(password)) {
+    errors.push('Хотя бы 1 специальный символ: ! @ # $ % ^ & * ( ) _ + - = [ ] { } ; : " \' , . < > / ?');
+  }
+
+  const low = password.toLowerCase();
+
+  // Запрет включать часть email (локальную) или полный email
+  if (email && typeof email === 'string') {
+    const emailLow = email.toLowerCase();
+    const localPart = emailLow.split('@')[0] || '';
+    if (localPart.length >= 3 && low.includes(localPart)) {
+      errors.push('Пароль не должен содержать часть вашего email (до @).');
+    }
+    if (emailLow.length >= 6 && low.includes(emailLow)) {
+      errors.push('Пароль не должен содержать ваш полный email.');
+    }
+  }
+
+  // Запрет включать username
+  if (username && typeof username === 'string') {
+    const u = username.toLowerCase().trim();
+    if (u.length >= 3 && low.includes(u)) {
+      errors.push('Пароль не должен содержать ваше имя пользователя.');
+    }
+  }
+
+  // Простые запрещённые последовательности
+  const commons = ['12345', '123456', 'password', 'qwerty', 'admin', 'user'];
+  if (commons.some(seq => low.includes(seq))) {
+    errors.push('Пароль не должен содержать простые последовательности (например 12345, qwerty, password).');
+  }
+
+  return errors;
+}
+
 app.post("/register", async (req, res) => {
   try {
-    const { username, email, password } = req.body;
-    const existing = await User.findOne({ email });
+    const { username = '', email, password } = req.body || {};
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email и пароль обязательны" });
+    }
+
+    const emailNorm = String(email).toLowerCase().trim();
+
+    // Проверка на существующего пользователя
+    const existing = await User.findOne({ email: emailNorm });
     if (existing) return res.status(400).json({ message: "Пользователь уже существует" });
 
+    // Валидация пароля по требованиям
+    const pwErrors = validatePassword(password, { username, email: emailNorm });
+    if (pwErrors.length > 0) {
+      // Возвращаем список причин, почему пароль не проходит
+      return res.status(400).json({
+        message: "Пароль не соответствует требованиям",
+        errors: pwErrors
+      });
+    }
+
+    // Всё ок — хешируем и создаём пользователя
     const hash = await bcrypt.hash(password, 10);
     const newUser = new User({
-      username,
-      email,
+      username: username || '',
+      email: emailNorm,
       password: hash,
       avatarUrl: "",
       stats: { totalAttempts: 0, successes: 0, avgScore: 0, totalTimeSec: 0 },
       achievements: [],
       lastActiveAt: new Date()
     });
-    await newUser.save();
 
+    await newUser.save();
 
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
     res.status(201).json({ message: "Регистрация успешна", token });
+
   } catch (err) {
-    console.error(err);
+    console.error("Register error:", err);
+    // Обработка ошибки дубликата на уровне БД (без гонки)
+    if (err && err.code === 11000 && err.keyPattern && err.keyPattern.email) {
+      return res.status(400).json({ message: "Пользователь с таким email уже существует" });
+    }
     res.status(500).json({ message: "Ошибка сервера" });
   }
 });
+// --- Конец патча ---
+
 
 app.post("/login", async (req, res) => {
   try {

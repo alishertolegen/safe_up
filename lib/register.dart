@@ -94,7 +94,7 @@ Future<void> _register(
   setState(() => _isLoading = true);
 
   try {
-    final url = Uri.parse("http://localhost:5000/register"); 
+    final url = Uri.parse("http://localhost:5000/register");
 
     final response = await http.post(
       url,
@@ -106,16 +106,19 @@ Future<void> _register(
       }),
     );
 
-    final data = jsonDecode(response.body);
+    dynamic data;
+    try {
+      data = jsonDecode(response.body);
+    } catch (_) {
+      data = null;
+    }
 
     if (response.statusCode == 201) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString("userEmail", email);
-
-      if (data["token"] != null) {
+      if (data != null && data["token"] != null) {
         await prefs.setString("token", data["token"]);
       }
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -125,14 +128,54 @@ Future<void> _register(
         );
         context.go("/home");
       }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(data["message"] ?? "Ошибка регистрации"),
-          backgroundColor: const Color.fromARGB(255, 177, 42, 32),
-        ),
-      );
+      return;
     }
+
+    // --- обработка ошибок сервера ---
+    String serverMessage = (data is Map && data["message"] != null) ? data["message"].toString() : "Ошибка регистрации";
+    List<dynamic>? serverErrors = (data is Map && data["errors"] is List) ? List.from(data["errors"]) : null;
+
+    // Сбросить прежние ошибки
+    setState(() {
+      nameError = null;
+      emailError = null;
+      passwordError = null;
+      confirmError = null;
+
+      if (serverErrors != null && serverErrors.isNotEmpty) {
+        // Показываем все причины под полем пароля (или можно разбирать по полям, если бекенд вернёт ключи)
+        passwordError = serverErrors.join('\n');
+      } else {
+        // Попытка угадать, к какому полю относится сообщение
+        final msgLower = serverMessage.toLowerCase();
+        if (msgLower.contains('email') || msgLower.contains('существ')) {
+          emailError = serverMessage;
+        } else if (msgLower.contains('пароль')) {
+          passwordError = serverMessage;
+        } else if (msgLower.contains('имя') || msgLower.contains('username')) {
+          nameError = serverMessage;
+        } else {
+          // Общая ошибка — покажем в Snackbar
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(serverMessage),
+              backgroundColor: const Color.fromARGB(255, 177, 42, 32),
+            ),
+          );
+        }
+      }
+    });
+
+    // Если есть ошибки (массив или поле), показать краткий SnackBar-резюме
+    final sbText = (serverErrors != null && serverErrors.isNotEmpty)
+        ? serverErrors.join('; ')
+        : serverMessage;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(sbText),
+        backgroundColor: const Color.fromARGB(255, 177, 42, 32),
+      ),
+    );
   } catch (e) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -144,6 +187,7 @@ Future<void> _register(
     if (mounted) setState(() => _isLoading = false);
   }
 }
+
 
 
   @override
