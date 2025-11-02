@@ -1,4 +1,3 @@
-// lib/screens/my_trainings_screen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -6,9 +5,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/training.dart';
 import 'TrainingDetailScreen.dart';
 
-const String API_BASE = String.fromEnvironment('API_BASE',
-    defaultValue:
-        'http://localhost:5000'); // для Android эмулятора. Для iOS/реального девайса укажи http://localhost:5000 или IP.
+const String API_BASE = String.fromEnvironment(
+  'API_BASE',
+  defaultValue: 'http://localhost:5000',
+);
+// Примечание: для Android-эмулятора обычно используйте http://10.0.2.2:5000 в переменной окружения API_BASE
 
 class MyTrainingsScreen extends StatefulWidget {
   const MyTrainingsScreen({super.key});
@@ -35,11 +36,9 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
     final token = await _readToken();
 
     if (token == null || token.isEmpty) {
-      // Если нет токена — лучше бросить исключение и показать пользователю кнопку "Войти" на UI.
       throw Exception('Требуется авторизация. Пожалуйста, войдите в аккаунт.');
     }
 
-    // Запрашиваем специально "мои" тренировки
     final uri = Uri.parse('$API_BASE/trainings/mine');
     final headers = <String, String>{
       'Content-Type': 'application/json',
@@ -59,72 +58,20 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
     }
 
     final List<dynamic> data = json.decode(res.body) as List<dynamic>;
-    return data
-        .where((e) => e is Map<String, dynamic>)
-        .map<Training>((e) => _trainingFromJson(e as Map<String, dynamic>))
+    // Используем фабрику из модели
+    final list = data
+        .where((e) => e is Map<String, dynamic> || e is Map)
+        .map<Training>((e) => Training.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
+    return list;
   }
 
-  // Преобразование json с сервера в модель Training (подстраивается под ту модель, что у тебя в ../models/training.dart)
-  Training _trainingFromJson(Map<String, dynamic> json) {
-    // id
-    final id = json['_id'] ?? json['id'] ?? '';
-
-    // title, type, difficulty
-    final title = json['title'] ?? 'Без названия';
-    final type = json['type'] ?? '';
-    final difficulty = json['difficulty']?.toString() ?? '';
-
-    // location: сервер возвращает объект { name, floor, extra } — склеим в строку, если нужно
-    String location = '';
-    final loc = json['location'];
-    if (loc is String) {
-      location = loc;
-    } else if (loc is Map) {
-      final name = (loc['name'] ?? '').toString();
-      final floor = (loc['floor'] ?? '').toString();
-      final extra = (loc['extra'] ?? '').toString();
-      location = [name, floor, extra].where((s) => s.isNotEmpty).join(', ');
-    }
-
-    // createdAt: сервер обычно возвращает ISO строку
-    DateTime createdAt;
-    try {
-      final s = json['createdAt'] ?? json['created_at'] ?? DateTime.now().toIso8601String();
-      createdAt = DateTime.parse(s.toString());
-    } catch (err) {
-      createdAt = DateTime.now();
-    }
-
-    // lastScorePercent: бек возвращает stats.attempts и stats.successes -> округлим процент успеха
-    double lastScorePercent = 0;
-    try {
-      final stats = (json['stats'] is Map) ? Map<String, dynamic>.from(json['stats'] as Map) : null;
-      final attemptsRaw = stats?['attempts'] ?? 0;
-      final successesRaw = stats?['successes'] ?? 0;
-
-      final attempts = attemptsRaw is int ? attemptsRaw : int.tryParse('$attemptsRaw') ?? 0;
-      final successes = successesRaw is int ? successesRaw : int.tryParse('$successesRaw') ?? 0;
-
-      if (attempts > 0) {
-        lastScorePercent = (successes / attempts) * 100;
-      } else {
-        lastScorePercent = 0;
-      }
-    } catch (_) {
-      lastScorePercent = 0;
-    }
-
-    // Если у тебя Training ожидает другие поля — поправь тут
-    return Training(
-      id: id.toString(),
-      title: title.toString(),
-      type: type.toString(),
-      location: location,
-      difficulty: difficulty,
-      createdAt: createdAt,
-      lastScorePercent: lastScorePercent,
-    );
+  Future<void> _refresh() async {
+    setState(() {
+      _futureTrainings = _fetchTrainings();
+    });
+    // ждём завершения, чтобы RefreshIndicator закрывался корректно
+    await _futureTrainings;
   }
 
   void _openDetail(BuildContext context, Training t) {
@@ -171,28 +118,32 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
                     return const Center(child: Text('Тренировок ещё нет. Создайте первую.'));
                   }
 
-                  return ListView.separated(
-                    itemCount: list.length,
-                    separatorBuilder: (_, __) => const Divider(),
-                    itemBuilder: (context, i) {
-                      final t = list[i];
-                      return ListTile(
-                        title: Text(t.title),
-                        subtitle: Text('${t.type} • ${t.location} • ${t.difficulty}'),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text('${t.lastScorePercent.toStringAsFixed(0)}%'),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${t.createdAt.day.toString().padLeft(2, '0')}.${t.createdAt.month.toString().padLeft(2, '0')}.${t.createdAt.year}',
-                              style: const TextStyle(fontSize: 11),
-                            ),
-                          ],
-                        ),
-                        onTap: () => _openDetail(context, t),
-                      );
-                    },
+                  return RefreshIndicator(
+                    onRefresh: _refresh,
+                    child: ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: list.length,
+                      separatorBuilder: (_, __) => const Divider(),
+                      itemBuilder: (context, i) {
+                        final t = list[i];
+                        final locName = t.location.name.isNotEmpty ? t.location.name : (t.location.floor.isNotEmpty ? t.location.floor : '-');
+                        final dateStr =
+                            '${t.createdAt.day.toString().padLeft(2, '0')}.${t.createdAt.month.toString().padLeft(2, '0')}.${t.createdAt.year}';
+                        return ListTile(
+                          title: Text(t.title),
+                          subtitle: Text('${t.type} • $locName • ${t.difficulty}'),
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('${t.lastScorePercent.toStringAsFixed(0)}%'),
+                              const SizedBox(height: 4),
+                              Text(dateStr, style: const TextStyle(fontSize: 11)),
+                            ],
+                          ),
+                          onTap: () => _openDetail(context, t),
+                        );
+                      },
+                    ),
                   );
                 },
               ),
