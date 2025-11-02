@@ -103,38 +103,53 @@ class TrainingDetailScreen extends StatelessWidget {
               child: Text('Сцены', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
             ),
             const SizedBox(height: 8),
-            // scenes list
-            Expanded(
-              child: ListView.builder(
-                itemCount: training.scenes.length,
-                itemBuilder: (ctx, idx) {
-                  final s = training.scenes[idx];
-                  return Card(
-                    child: ExpansionTile(
-                      key: PageStorageKey('scene_${s.id}'),
-                      title: Text('${s.id}. ${s.title}'),
-                      subtitle: Text(s.hint),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6),
-                          child: Text(s.description),
-                        ),
-                        const Divider(),
-                        ...s.choices.map((c) {
-                          return ListTile(
-                            leading: _iconForConsequence(c.consequenceType),
-                            title: Text(c.text),
-                            subtitle: c.consequenceText.isNotEmpty ? Text(c.consequenceText) : null,
-                            trailing: Text('${c.scoreDelta >= 0 ? '+' : ''}${c.scoreDelta}'),
-                          );
-                        }).toList(),
-                        const SizedBox(height: 6)
-                      ],
+            // scenes list — показываем только когда успехи >= 1
+            training.stats.successes >= 1
+                ? Expanded(
+                    child: ListView.builder(
+                      itemCount: training.scenes.length,
+                      itemBuilder: (ctx, idx) {
+                        final s = training.scenes[idx];
+                        return Card(
+                          child: ExpansionTile(
+                            key: PageStorageKey('scene_${s.id}'),
+                            title: Text('${s.id}. ${s.title}'),
+                            subtitle: Text(s.hint),
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6),
+                                child: Text(s.description),
+                              ),
+                              const Divider(),
+                              ...s.choices.map((c) {
+                                return ListTile(
+                                  leading: _iconForConsequence(c.consequenceType),
+                                  title: Text(c.text),
+                                  subtitle: c.consequenceText.isNotEmpty ? Text(c.consequenceText) : null,
+                                  trailing: Text('${c.scoreDelta >= 0 ? '+' : ''}${c.scoreDelta}'),
+                                );
+                              }).toList(),
+                              const SizedBox(height: 6)
+                            ],
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-            ),
+                  )
+                : Expanded(
+                    child: Center(
+                      child: Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Text(
+                            'Сцены будут видны после того, как Успехи станут 1 или больше.',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
             const SizedBox(height: 8),
             // footer buttons
             Row(
