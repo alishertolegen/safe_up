@@ -5,6 +5,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
 require("dotenv").config();
+const axios = require("axios");
 
 const app = express();
 app.use(express.json());
@@ -15,7 +16,7 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.error("MongoDB connection error:", err));
 
 /**
- * User schema (твой существующий)
+ * Schemas
  */
 const userSchema = new mongoose.Schema({
   username: String,
@@ -25,12 +26,8 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model("User", userSchema);
 
-/**
- * Trainings schema
- * простая, понятная структура для тренировки/сценария
- */
 const choiceSchema = new mongoose.Schema({
-  id: String, // локальный id выбора, например "a", "b"
+  id: String,
   text: String,
   consequenceType: { type: String, enum: ["correct", "warning", "fatal", "neutral"], default: "neutral" },
   consequenceText: String,
@@ -49,7 +46,7 @@ const sceneSchema = new mongoose.Schema({
 const trainingSchema = new mongoose.Schema({
   title: { type: String, required: true },
   summary: String,
-  type: String, // 'пожар', 'затопление' и т.д.
+  type: String,
   location: {
     name: String,
     floor: String,
@@ -65,7 +62,7 @@ const trainingSchema = new mongoose.Schema({
   durationEstimateSec: Number,
   scenes: [sceneSchema],
   summaryMetrics: {
-    totalChoices: Number // можно посчитать при создании/обновлении
+    totalChoices: Number
   },
   stats: {
     attempts: { type: Number, default: 0 },
@@ -82,8 +79,6 @@ const Training = mongoose.model("Training", trainingSchema);
 
 /**
  * Auth middleware
- * - ожидает заголовок Authorization: "Bearer <token>"
- * - после верификации кладёт req.userId
  */
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
@@ -99,7 +94,167 @@ function authMiddleware(req, res, next) {
 }
 
 /**
- * Auth routes: register / login
+ * Hugging Face Router helper + parsers + fallbacks
+ */
+async function callRouter(body) {
+  const HF_TOKEN = process.env.HF_TOKEN;
+  const apiUrl = 'https://router.huggingface.co/v1/chat/completions';
+  if (!HF_TOKEN) throw new Error('HF_TOKEN not set in environment');
+
+  const resp = await axios.post(apiUrl, body, {
+    headers: { Authorization: `Bearer ${HF_TOKEN}`, 'Content-Type': 'application/json' },
+    timeout: 90000
+  });
+  if (!resp.data) throw new Error('Empty response from HF router');
+  const d = resp.data;
+  let text = '';
+  if (Array.isArray(d.choices) && d.choices.length > 0) {
+    const ch = d.choices[0];
+    if (ch.message && typeof ch.message.content === 'string') text = ch.message.content;
+    else if (ch.text && typeof ch.text === 'string') text = ch.text;
+    else text = JSON.stringify(ch);
+  } else if (typeof d.output === 'string') {
+    text = d.output;
+  } else {
+    text = JSON.stringify(d);
+  }
+  return text;
+}
+
+function extractJsonArray(text) {
+  const first = text.indexOf('[');
+  const last = text.lastIndexOf(']');
+  if (first !== -1 && last !== -1 && last > first) {
+    const jsonStr = text.slice(first, last + 1);
+    return JSON.parse(jsonStr);
+  }
+  throw new Error('No JSON array found in model output');
+}
+
+/** Local fallback: simple skeleton (titles only) */
+function simpleGenerateScenesSkeleton(title, scenesCount = 5, choicesPerScene = 3) {
+  const base = (title || "Сценарий").trim();
+  const scenes = [];
+  for (let i = 1; i <= scenesCount; i++) {
+    const choices = [];
+    for (let c = 0; c < choicesPerScene; c++) {
+      const id = String.fromCharCode(97 + c); // a, b, c...
+      choices.push({
+        id,
+        text: `Вариант ${id.toUpperCase()} для сцены ${i}`,
+        consequenceType: "neutral",
+        consequenceText: "",
+        scoreDelta: 0
+      });
+    }
+    scenes.push({
+      id: i,
+      title: `${base} — Сцена ${i}`,
+      description: `Короткое описание для сцены ${i}.`,
+      hint: `Подсказка для сцены ${i}.`,
+      choices,
+      defaultChoiceId: choices[0].id
+    });
+  }
+  return scenes;
+}
+
+/** Local full fallback (theory + practice style -> here: descriptions + choices) */
+function simpleGenerateScenes(title, scenesCount = 5, choicesPerScene = 3) {
+  const base = (title || "Сценарий").trim();
+  const scenes = [];
+  for (let i = 1; i <= scenesCount; i++) {
+    const choices = [];
+    for (let c = 0; c < choicesPerScene; c++) {
+      const id = String.fromCharCode(97 + c);
+      const isCorrect = c === 0; // первый вариант — корректный по умолчанию
+      choices.push({
+        id,
+        text: isCorrect ? `Правильное действие ${id.toUpperCase()} при ситуации ${i}` : `Неправильное/менее удачное действие ${id.toUpperCase()} при ситуации ${i}`,
+        consequenceType: isCorrect ? "correct" : (c === 1 ? "warning" : "fatal"),
+        consequenceText: isCorrect ? `Это безопасный и рекомендованный вариант.` : (c === 1 ? "Это рискованно — приведёт к замедлению эвакуации." : "Это опасно — возможны жертвы."),
+        scoreDelta: isCorrect ? 10 : (c === 1 ? -2 : -10)
+      });
+    }
+    scenes.push({
+      id: i,
+      title: `${base} — Сцена ${i}`,
+      description: `Подробное описание ситуации ${i}, где участнику нужно принять решение в условиях ограниченного времени.`,
+      hint: `Подумайте о безопасности людей и возможных путях эвакуации.`,
+      choices,
+      defaultChoiceId: choices[0].id
+    });
+  }
+  return scenes;
+}
+
+/** Generate scenes via HF Router */
+async function generateScenesHf(title, scenesCount = 5, choicesPerScene = 3) {
+  const model = process.env.HF_MODEL;
+  const systemMsg = 'You are an assistant that outputs ONLY valid JSON arrays. Use concise Russian. No extra text.';
+  const prompt = `
+Generate EXACTLY a JSON array of scene objects for a training with title: "${title}".
+Return an array with ${scenesCount} objects. Each object must have:
+- id: number (1..${scenesCount})
+- title: short title (string)
+- description: one paragraph describing the scene/situation
+- hint: 1-2 sentence hint for the participant
+- choices: an array with ${choicesPerScene} objects, each having:
+  - id: string ("a","b","c",...)
+  - text: short text of the choice
+  - consequenceType: one of "correct","warning","fatal","neutral"
+  - consequenceText: one short sentence describing consequence
+  - scoreDelta: integer (can be negative or positive)
+- defaultChoiceId: the id of a default choice (e.g. "a")
+
+Do NOT output any explanation or extra text — ONLY the JSON array.
+Example element:
+{"id":1,"title":"...","description":"...","hint":"...","choices":[{"id":"a","text":"...","consequenceType":"correct","consequenceText":"...","scoreDelta":10}, ...],"defaultChoiceId":"a"}
+`;
+
+  const body = {
+    model,
+    messages: [
+      { role: 'system', content: systemMsg },
+      { role: 'user', content: prompt }
+    ],
+    stream: false,
+    max_new_tokens: 1200,
+    temperature: 0.25
+  };
+
+  try {
+    const text = await callRouter(body);
+    const parsed = extractJsonArray(text);
+    if (!Array.isArray(parsed)) throw new Error('Parsed not array');
+    // Normalize parsed items
+    const scenes = parsed.map((it, idx) => {
+      const choices = Array.isArray(it.choices) ? it.choices.map((c, ci) => ({
+        id: String(c.id || String.fromCharCode(97 + ci)),
+        text: String(c.text || '').trim(),
+        consequenceType: (String(c.consequenceType || 'neutral')).trim(),
+        consequenceText: String(c.consequenceText || '').trim(),
+        scoreDelta: Number(c.scoreDelta || 0)
+      })) : [];
+      return {
+        id: Number(it.id) || (idx + 1),
+        title: String(it.title || `Сцена ${idx+1}`).trim(),
+        description: String(it.description || '').trim(),
+        hint: String(it.hint || '').trim(),
+        choices,
+        defaultChoiceId: String(it.defaultChoiceId || (choices.length ? choices[0].id : 'a'))
+      };
+    });
+    return scenes;
+  } catch (err) {
+    console.warn('generateScenesHf failed, using fallback:', err.message || err);
+    // fallback to full generator
+    return simpleGenerateScenes(title, scenesCount, choicesPerScene);
+  }
+}
+
+/**
+ * Auth routes (register/login) and users/profile
  */
 app.post("/register", async (req, res) => {
   try {
@@ -135,9 +290,6 @@ app.post("/login", async (req, res) => {
   }
 });
 
-/**
- * Пользователи
- */
 app.get("/users", async(req, res) =>{
   try{
     const users = await User.find({}, "-password");
@@ -159,16 +311,9 @@ app.get("/profile", authMiddleware, async(req, res) =>{
 
 /**
  * Trainings endpoints
- *
- * GET /trainings               - список (фильтры: type, tag, isPublished)
- * GET /trainings/:id           - получить один сценарий
- * POST /trainings              - создать (auth)
- * PUT  /trainings/:id          - обновить (auth, желательно автор)
- * DELETE /trainings/:id        - удалить (auth, желательно автор)
- * POST /trainings/:id/attempt  - отправить результат прохождения (auth)
  */
 
-/** List trainings с простыми фильтрами */
+/** List trainings */
 app.get("/trainings", async (req, res) => {
   try {
     const { type, tag, isPublished, q, limit = 20, skip = 0 } = req.query;
@@ -176,10 +321,10 @@ app.get("/trainings", async (req, res) => {
     if (type) filter.type = type;
     if (typeof isPublished !== "undefined") filter.isPublished = isPublished === "true";
     if (tag) filter.tags = tag;
-    if (q) filter.$text = { $search: q }; // если добавишь text index — будет работать
+    if (q) filter.$text = { $search: q };
 
     const trainings = await Training.find(filter)
-      .select("-scenes.choices.consequenceText") // можно скрыть подсказки/тексты последствий при листинге
+      .select("-scenes.choices.consequenceText")
       .limit(Math.min(100, parseInt(limit)))
       .skip(parseInt(skip))
       .sort({ createdAt: -1 });
@@ -203,21 +348,70 @@ app.get("/trainings/:id", async (req, res) => {
   }
 });
 
-/** Create training (auth) */
+/** Create training (auth) — с интеграцией AI (если нужно) */
 app.post("/trainings", authMiddleware, async (req, res) => {
   try {
     const payload = req.body;
-    // базовая валидация: title и сцены
     if (!payload.title) return res.status(400).json({ message: "Не указан title" });
-    if (!Array.isArray(payload.scenes) || payload.scenes.length === 0) {
-      return res.status(400).json({ message: "Необходимо как минимум одна сцена" });
+
+    // determine scenes: if scenes provided and non-empty => use them; otherwise if aiGenerate true => call HF; else require at least one scene
+    let scenes = Array.isArray(payload.scenes) ? payload.scenes : [];
+    const defaultScenesCount = Number(process.env.DEFAULT_SCENES) || 5;
+    const scenesCount = Number(payload.scenesCount) || defaultScenesCount;
+    const choicesPerScene = Number(payload.choicesPerScene) || 3;
+
+    let aiMeta = { model: null, promptSeed: null, version: null };
+    let aiGeneratedFlag = false;
+
+    if ((!scenes || scenes.length === 0) && payload.aiGenerate) {
+      // generate via HF (full scenes)
+      try {
+        const generated = await generateScenesHf(payload.title, scenesCount, choicesPerScene);
+        // ensure ids are numeric and choices ids exist
+        scenes = generated.map((s, idx) => ({
+          id: Number(s.id) || (idx + 1),
+          title: s.title,
+          description: s.description,
+          hint: s.hint,
+          choices: Array.isArray(s.choices) ? s.choices : [],
+          defaultChoiceId: s.defaultChoiceId || (Array.isArray(s.choices) && s.choices.length ? s.choices[0].id : "a")
+        }));
+        aiGeneratedFlag = true;
+        aiMeta = { model: process.env.HF_MODEL || null, promptSeed: payload.title, version: new Date().toISOString() };
+      } catch (err) {
+        console.warn("AI generation failed during create, falling back to local generator:", err.message || err);
+        scenes = simpleGenerateScenes(payload.title, scenesCount, choicesPerScene);
+        aiGeneratedFlag = false;
+      }
+    } else if ((!scenes || scenes.length === 0) && !payload.aiGenerate) {
+      // if no scenes and user didn't request aiGenerate — use simple skeleton fallback with defaultScenesCount
+      scenes = simpleGenerateScenesSkeleton(payload.title, scenesCount, choicesPerScene);
+    } else {
+      // scenes provided by user — ensure shape and numeric ids
+      scenes = scenes.map((s, idx) => ({
+        id: Number(s.id) || (idx + 1),
+        title: s.title || `Сцена ${idx+1}`,
+        description: s.description || "",
+        hint: s.hint || "",
+        choices: Array.isArray(s.choices) ? s.choices.map((c, ci) => ({
+          id: String(c.id || String.fromCharCode(97 + ci)),
+          text: c.text || "",
+          consequenceType: c.consequenceType || "neutral",
+          consequenceText: c.consequenceText || "",
+          scoreDelta: Number(c.scoreDelta || 0)
+        })) : [],
+        defaultChoiceId: s.defaultChoiceId || (Array.isArray(s.choices) && s.choices.length ? s.choices[0].id : "a")
+      }));
     }
 
-    // подсчитать totalChoices автоматически
-    const totalChoices = payload.scenes.length;
+    // calculate totalChoices
+    const totalChoices = scenes.reduce((acc, s) => acc + (Array.isArray(s.choices) ? s.choices.length : 0), 0);
 
     const training = new Training({
       ...payload,
+      scenes,
+      aiGenerated: aiGeneratedFlag,
+      aiMeta,
       summaryMetrics: { totalChoices },
       createdBy: req.userId
     });
@@ -230,18 +424,14 @@ app.post("/trainings", authMiddleware, async (req, res) => {
   }
 });
 
-/** Update training (auth) - простая реализация, без проверки прав (можно добавить проверку createdBy) */
+/** Update training */
 app.put("/trainings/:id", authMiddleware, async (req, res) => {
   try {
     const training = await Training.findById(req.params.id);
     if (!training) return res.status(404).json({ message: "Тренировка не найдена" });
 
-    // Если нужно — проверять что req.userId == training.createdBy.toString()
-    // if (training.createdBy && training.createdBy.toString() !== req.userId) return res.status(403).json({ message: "Нет прав" });
-
     Object.assign(training, req.body);
 
-    // если сцены изменились — обновим totalChoices
     if (Array.isArray(req.body.scenes)) {
       training.summaryMetrics = { totalChoices: req.body.scenes.length };
     }
@@ -254,14 +444,11 @@ app.put("/trainings/:id", authMiddleware, async (req, res) => {
   }
 });
 
-/** Delete training (auth) */
+/** Delete training */
 app.delete("/trainings/:id", authMiddleware, async (req, res) => {
   try {
     const training = await Training.findById(req.params.id);
     if (!training) return res.status(404).json({ message: "Тренировка не найдена" });
-
-    // при желании добавь проверку на автора
-    // if (training.createdBy && training.createdBy.toString() !== req.userId) return res.status(403).json({ message: "Нет прав" });
 
     await Training.deleteOne({ _id: req.params.id });
     res.json({ message: "Тренировка удалена" });
@@ -272,9 +459,7 @@ app.delete("/trainings/:id", authMiddleware, async (req, res) => {
 });
 
 /**
- * POST /trainings/:id/attempt
- * body: { choices: [{ sceneId: number, choiceId: string }], timeSec: number }
- * Возвращает: подсчитанный результат и обновляет stats в training
+ * Attempt endpoint unchanged
  */
 app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
   try {
@@ -284,7 +469,6 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
     const training = await Training.findById(req.params.id);
     if (!training) return res.status(404).json({ message: "Тренировка не найдена" });
 
-    // подготовка map для быстрого доступа к сценам/выборам
     const sceneMap = new Map();
     for (const s of training.scenes) {
       const choiceMap = new Map();
@@ -292,7 +476,6 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
       sceneMap.set(s.id, { scene: s, choices: choiceMap });
     }
 
-    // подсчёт результатов
     let totalScore = 0;
     let correctAnswers = 0;
     let totalScenesConsidered = 0;
@@ -322,11 +505,9 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
       });
     }
 
-    // итоги
     const totalChoices = training.summaryMetrics?.totalChoices ?? training.scenes.length;
     const success = (correctAnswers === totalChoices);
 
-    // обновляем stats: attempts++, successes++ если success, пересчитываем avgTimeSec как скользящая средняя
     const prevAttempts = training.stats.attempts || 0;
     const prevAvg = training.stats.avgTimeSec || 0;
     const newAttempts = prevAttempts + 1;
