@@ -469,18 +469,6 @@ app.get("/trainings", async (req, res) => {
   }
 });
 
-/** Get one training */
-app.get("/trainings/:id", async (req, res) => {
-  try {
-    const t = await Training.findById(req.params.id).populate("createdBy", "username email");
-    if (!t) return res.status(404).json({ message: "Тренировка не найдена" });
-    res.json(t);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Ошибка при получении тренировки" });
-  }
-});
-
 /** Create training (auth) — с интеграцией AI (если нужно) */
 app.post("/trainings", authMiddleware, async (req, res) => {
   try {
@@ -673,6 +661,44 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Ошибка при записи попытки" });
+  }
+});
+
+/** List trainings of the current authenticated user */
+app.get("/trainings/mine", authMiddleware, async (req, res) => {
+  try {
+    const { type, tag, isPublished, limit = 20, skip = 0 } = req.query;
+
+    // Базовый фильтр — только записи этого пользователя
+    const filter = { createdBy: req.userId };
+
+    if (type) filter.type = type;
+    if (typeof isPublished !== "undefined") filter.isPublished = isPublished === "true";
+    if (tag) filter.tags = tag;
+    // Можно добавить другие фильтры по необходимости
+
+    const trainings = await Training.find(filter)
+      .select("-scenes.choices.consequenceText")
+      .limit(Math.min(100, parseInt(limit)))
+      .skip(parseInt(skip))
+      .sort({ createdAt: -1 });
+
+    res.json(trainings);
+  } catch (err) {
+    console.error("Error /trainings/mine:", err);
+    res.status(500).json({ message: "Ошибка при получении ваших тренингов" });
+  }
+});
+
+/** Get one training ВСЕГДА ДОЛЖЕН БЫТЬ НИЖЕ ВСЕХ РОУТОВ!*/ 
+app.get("/trainings/:id", async (req, res) => {
+  try {
+    const t = await Training.findById(req.params.id).populate("createdBy", "username email");
+    if (!t) return res.status(404).json({ message: "Тренировка не найдена" });
+    res.json(t);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Ошибка при получении тренировки" });
   }
 });
 

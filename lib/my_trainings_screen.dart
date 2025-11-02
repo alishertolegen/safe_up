@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/training.dart';
 import 'TrainingDetailScreen.dart';
+
 const String API_BASE = String.fromEnvironment('API_BASE',
     defaultValue:
         'http://localhost:5000'); // для Android эмулятора. Для iOS/реального девайса укажи http://localhost:5000 или IP.
@@ -32,20 +33,36 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
 
   Future<List<Training>> _fetchTrainings() async {
     final token = await _readToken();
-    final uri = Uri.parse('$API_BASE/trainings'); // можно добавить фильтры ?isPublished=true
+
+    if (token == null || token.isEmpty) {
+      // Если нет токена — лучше бросить исключение и показать пользователю кнопку "Войти" на UI.
+      throw Exception('Требуется авторизация. Пожалуйста, войдите в аккаунт.');
+    }
+
+    // Запрашиваем специально "мои" тренировки
+    final uri = Uri.parse('$API_BASE/trainings/mine');
     final headers = <String, String>{
       'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
+      'Authorization': 'Bearer $token',
     };
 
     final res = await http.get(uri, headers: headers);
 
+    if (res.statusCode == 401) {
+      throw Exception('Неавторизован. Пожалуйста, войдите снова.');
+    }
+    if (res.statusCode == 403) {
+      throw Exception('Доступ запрещён. Токен просрочен или некорректен.');
+    }
     if (res.statusCode != 200) {
       throw Exception('Ошибка при получении тренингов: ${res.statusCode} ${res.body}');
     }
 
-    final List<dynamic> data = json.decode(res.body);
-    return data.map<Training>((e) => _trainingFromJson(e)).toList();
+    final List<dynamic> data = json.decode(res.body) as List<dynamic>;
+    return data
+        .where((e) => e is Map<String, dynamic>)
+        .map<Training>((e) => _trainingFromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // Преобразование json с сервера в модель Training (подстраивается под ту модель, что у тебя в ../models/training.dart)
@@ -56,7 +73,7 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
     // title, type, difficulty
     final title = json['title'] ?? 'Без названия';
     final type = json['type'] ?? '';
-    String difficulty = json['difficulty']?.toString() ?? '';
+    final difficulty = json['difficulty']?.toString() ?? '';
 
     // location: сервер возвращает объект { name, floor, extra } — склеим в строку, если нужно
     String location = '';
@@ -64,10 +81,10 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
     if (loc is String) {
       location = loc;
     } else if (loc is Map) {
-      final name = loc['name'] ?? '';
-      final floor = loc['floor'] ?? '';
-      final extra = loc['extra'] ?? '';
-      location = [name, floor, extra].where((s) => (s?.toString().isNotEmpty ?? false)).join(', ');
+      final name = (loc['name'] ?? '').toString();
+      final floor = (loc['floor'] ?? '').toString();
+      final extra = (loc['extra'] ?? '').toString();
+      location = [name, floor, extra].where((s) => s.isNotEmpty).join(', ');
     }
 
     // createdAt: сервер обычно возвращает ISO строку
@@ -82,9 +99,13 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
     // lastScorePercent: бек возвращает stats.attempts и stats.successes -> округлим процент успеха
     double lastScorePercent = 0;
     try {
-      final stats = json['stats'] as Map<String, dynamic>?;
-      final attempts = (stats?['attempts'] ?? 0) is int ? stats!['attempts'] as int : int.tryParse('${stats?['attempts']}') ?? 0;
-      final successes = (stats?['successes'] ?? 0) is int ? stats!['successes'] as int : int.tryParse('${stats?['successes']}') ?? 0;
+      final stats = (json['stats'] is Map) ? Map<String, dynamic>.from(json['stats'] as Map) : null;
+      final attemptsRaw = stats?['attempts'] ?? 0;
+      final successesRaw = stats?['successes'] ?? 0;
+
+      final attempts = attemptsRaw is int ? attemptsRaw : int.tryParse('$attemptsRaw') ?? 0;
+      final successes = successesRaw is int ? successesRaw : int.tryParse('$successesRaw') ?? 0;
+
       if (attempts > 0) {
         lastScorePercent = (successes / attempts) * 100;
       } else {
@@ -97,8 +118,8 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
     // Если у тебя Training ожидает другие поля — поправь тут
     return Training(
       id: id.toString(),
-      title: title,
-      type: type,
+      title: title.toString(),
+      type: type.toString(),
       location: location,
       difficulty: difficulty,
       createdAt: createdAt,
