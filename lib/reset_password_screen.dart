@@ -95,8 +95,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Пароль успешно изменён'), backgroundColor: Colors.green),
           );
-          // go to login or home
-          context.go('/login');
+          context.go('/home');
         }
       } else {
         if (mounted) {
