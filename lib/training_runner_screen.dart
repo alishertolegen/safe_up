@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/training.dart';
@@ -165,77 +166,76 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
   }
 
   void _showResultDialog(Map<String, dynamic>? result, Map<String, dynamic>? updatedStats) {
-    final totalScore = result?['totalScore']?.toString() ?? '-';
-    final correctAnswers = result?['correctAnswers']?.toString() ?? '-';
-    final totalChoices = result?['totalChoices']?.toString() ?? '-';
-    final success = result?['success'] == true;
+  final totalScore = result?['totalScore']?.toString() ?? '-';
+  final correctAnswers = result?['correctAnswers']?.toString() ?? '-';
+  final totalChoices = result?['totalChoices']?.toString() ?? '-';
+  final success = result?['success'] == true;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          title: Text(success ? 'Успешно!' : 'Результат попытки'),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Очки: $totalScore'),
-                Text('Правильных: $correctAnswers / $totalChoices'),
-                const SizedBox(height: 8),
-                if (result?['details'] is List)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: (result!['details'] as List).map<Widget>((d) {
-                      final sceneId = d['sceneId']?.toString() ?? '?';
-                      final choiceId = d['choiceId']?.toString() ?? '-';
-                      final cons = d['consequenceType']?.toString() ?? '-';
-                      // scoreDelta не показываем
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Text('Сцена $sceneId — выбор $choiceId — $cons'),
-                      );
-                    }).toList(),
-                  ),
-                const SizedBox(height: 8),
-                if (updatedStats != null) ...[
-                  const Divider(),
-                  const Text('Обновлённые статистики:', style: TextStyle(fontWeight: FontWeight.w600)),
-                  Text('Попыток: ${updatedStats['attempts'] ?? '-'}'),
-                  Text('Успехов: ${updatedStats['successes'] ?? '-'}'),
-                  Text('Avg sec: ${updatedStats['avgTimeSec'] ?? '-'}'),
-                ]
-              ],
-            ),
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) {
+      return AlertDialog(
+        title: Text(success ? 'Успешно!' : 'Результат попытки'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Очки: $totalScore'),
+              Text('Правильных: $correctAnswers / $totalChoices'),
+              const SizedBox(height: 8),
+              if (result?['details'] is List)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: (result!['details'] as List).map<Widget>((d) {
+                    final sceneId = d['sceneId']?.toString() ?? '?';
+                    final choiceId = d['choiceId']?.toString() ?? '-';
+                    final cons = d['consequenceType']?.toString() ?? '-';
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text('Сцена $sceneId — выбор $choiceId — $cons'),
+                    );
+                  }).toList(),
+                ),
+              const SizedBox(height: 8),
+              if (updatedStats != null) ...[
+                const Divider(),
+                const Text('Обновлённые статистики:', style: TextStyle(fontWeight: FontWeight.w600)),
+                Text('Попыток: ${updatedStats['attempts'] ?? '-'}'),
+                Text('Успехов: ${updatedStats['successes'] ?? '-'}'),
+                Text('Avg sec: ${updatedStats['avgTimeSec'] ?? '-'}'),
+              ]
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                Navigator.of(context).pop(); // закроет Runner screen
-              },
-              child: const Text('Закрыть'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                // если захотим пройти ещё раз — сбросим
-                setState(() {
-                  _answers.clear();
-                  _results.clear();
-                  _elapsedSec = 0;
-                  _startTimer();
-                  _submitting = false;
-                });
-              },
-              child: const Text('Пройти ещё раз'),
-            )
-          ],
-        );
-      },
-    );
-  }
-
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop(); // закрывает диалог
+              Navigator.of(context).pop(); // закрывает TrainingRunnerScreen
+              context.go('/profile'); // переход на /mytrainings через GoRouter
+            },
+            child: const Text('Закрыть'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              // если захотим пройти ещё раз — сбросим
+              setState(() {
+                _answers.clear();
+                _results.clear();
+                _elapsedSec = 0;
+                _startTimer();
+                _submitting = false;
+              });
+            },
+            child: const Text('Пройти ещё раз'),
+          )
+        ],
+      );
+    },
+  );
+}
   @override
   Widget build(BuildContext context) {
     final scenes = widget.training.scenes;
