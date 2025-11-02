@@ -94,7 +94,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final url = Uri.parse("http://10.0.2.2:5000/register");
+      final url = Uri.parse("https://safe-up.onrender.com/register");
 
       final response = await http.post(
         url,

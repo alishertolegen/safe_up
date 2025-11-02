@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 const String apiBase = String.fromEnvironment('API_BASE',
-    defaultValue: 'http://10.0.2.2:5000');
+    defaultValue: 'https://safe-up.onrender.com');
 
 class CreateTrainingScreen extends StatefulWidget {
   const CreateTrainingScreen({super.key});
