@@ -1,6 +1,7 @@
 // lib/screens/training_detail_screen.dart
 import 'package:flutter/material.dart';
 import '../models/training.dart';
+import 'training_runner_screen.dart';
 
 class TrainingDetailScreen extends StatelessWidget {
   final Training training;
@@ -141,9 +142,8 @@ class TrainingDetailScreen extends StatelessWidget {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () {
-                      // запускаем тренировку — здесь можно навигировать на runner screen
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Запуск тренировки "${training.title}" — сцен: ${training.scenes.length}')),
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => TrainingRunnerScreen(training: training)),
                       );
                     },
                     child: const Padding(
