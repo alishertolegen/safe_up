@@ -83,173 +83,183 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     return nErr == null && eErr == null && pErr == null && cErr == null;
   }
 
-Future<void> _register(
-  BuildContext context,
-  String name,
-  String email,
-  String password,
-) async {
-  if (!_validateAll()) return;
+  Future<void> _register(
+    BuildContext context,
+    String name,
+    String email,
+    String password,
+  ) async {
+    if (!_validateAll()) return;
 
-  setState(() => _isLoading = true);
+    setState(() => _isLoading = true);
 
-  try {
-    final url = Uri.parse("http://localhost:5000/register");
-
-    final response = await http.post(
-      url,
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "username": name,
-        "email": email,
-        "password": password,
-      }),
-    );
-
-    dynamic data;
     try {
-      data = jsonDecode(response.body);
-    } catch (_) {
-      data = null;
-    }
+      final url = Uri.parse("http://10.0.2.2:5000/register");
 
-    if (response.statusCode == 201) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString("userEmail", email);
-      if (data != null && data["token"] != null) {
-        await prefs.setString("token", data["token"]);
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "username": name,
+          "email": email,
+          "password": password,
+        }),
+      );
+
+      dynamic data;
+      try {
+        data = jsonDecode(response.body);
+      } catch (_) {
+        data = null;
       }
-      if (mounted) {
+
+      if (response.statusCode == 201) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString("userEmail", email);
+        if (data != null && data["token"] != null) {
+          await prefs.setString("token", data["token"]);
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 12),
+                  Text("Регистрация успешна!"),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+          context.go("/home");
+        }
+        return;
+      }
+
+      String serverMessage = (data is Map && data["message"] != null)
+          ? data["message"].toString()
+          : "Ошибка регистрации";
+      List<dynamic>? serverErrorsRaw =
+          (data is Map && data["errors"] is List) ? List.from(data["errors"]) : null;
+
+      List<String> serverErrors = [];
+      if (serverErrorsRaw != null) {
+        for (var e in serverErrorsRaw) {
+          if (e == null) continue;
+          serverErrors.add(e.toString());
+        }
+      }
+
+      if (serverErrors.isEmpty && serverMessage.isNotEmpty) {
+        serverErrors.add(serverMessage);
+      }
+
+      final List<String> emailMsgs = [];
+      final List<String> passwordMsgs = [];
+      final List<String> nameMsgs = [];
+      final List<String> otherMsgs = [];
+
+      for (final raw in serverErrors) {
+        final s = raw.trim();
+        final low = s.toLowerCase();
+
+        if (low.contains('email') ||
+            low.contains('почт') ||
+            low.contains('@') ||
+            low.contains('домен') ||
+            low.contains('локал') ||
+            low.contains('некорректн') ||
+            low.contains('формат')) {
+          emailMsgs.add(s);
+          continue;
+        }
+
+        if (low.contains('пароль') ||
+            low.contains('заглав') ||
+            low.contains('строч') ||
+            low.contains('цифр') ||
+            low.contains('специаль') ||
+            low.contains('минимум') ||
+            low.contains('символ') ||
+            low.contains('последовательн') ||
+            low.contains('не должен содержать')) {
+          passwordMsgs.add(s);
+          continue;
+        }
+
+        if (low.contains('имя') || low.contains('username') || low.contains('ник')) {
+          nameMsgs.add(s);
+          continue;
+        }
+
+        otherMsgs.add(s);
+      }
+
+      setState(() {
+        nameError = nameMsgs.isNotEmpty ? nameMsgs.join('\n') : null;
+        emailError = emailMsgs.isNotEmpty ? emailMsgs.join('\n') : null;
+        passwordError = passwordMsgs.isNotEmpty ? passwordMsgs.join('\n') : null;
+        confirmError = null;
+      });
+
+      final List<String> sbList = [];
+      if (emailMsgs.isNotEmpty) sbList.addAll(emailMsgs);
+      if (passwordMsgs.isNotEmpty) sbList.addAll(passwordMsgs);
+      if (nameMsgs.isNotEmpty) sbList.addAll(nameMsgs);
+      if (otherMsgs.isNotEmpty) sbList.addAll(otherMsgs);
+
+      final sbText = sbList.isNotEmpty ? sbList.join('; ') : serverMessage;
+      if (sbText.isNotEmpty && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Регистрация успешна!"),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text(sbText)),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
-        context.go("/home");
       }
-      return;
-    }
-
-    // --- обработка ошибок сервера ---
-    String serverMessage = (data is Map && data["message"] != null) ? data["message"].toString() : "Ошибка регистрации";
-    List<dynamic>? serverErrorsRaw = (data is Map && data["errors"] is List) ? List.from(data["errors"]) : null;
-
-    // Нормализуем в список строк
-    List<String> serverErrors = [];
-    if (serverErrorsRaw != null) {
-      for (var e in serverErrorsRaw) {
-        if (e == null) continue;
-        serverErrors.add(e.toString());
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.wifi_off, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text("Ошибка соединения: $e")),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-
-    // Если нет массива, но есть message — попробуем поместить message в обработку
-    if (serverErrors.isEmpty && serverMessage.isNotEmpty) {
-      serverErrors.add(serverMessage);
-    }
-
-    // Классификация ошибок по полям
-    final List<String> emailMsgs = [];
-    final List<String> passwordMsgs = [];
-    final List<String> nameMsgs = [];
-    final List<String> otherMsgs = [];
-
-    for (final raw in serverErrors) {
-      final s = raw.trim();
-      final low = s.toLowerCase();
-
-      // Правила для email
-      if (low.contains('email') ||
-          low.contains('почт') ||
-          low.contains('@') ||
-          low.contains('домен') ||
-          low.contains('локал') ||
-          low.contains('некорректн') ||
-          low.contains('формат')) {
-        emailMsgs.add(s);
-        continue;
-      }
-
-      // Правила для пароля
-      if (low.contains('пароль') ||
-          low.contains('заглав') ||
-          low.contains('строч') ||
-          low.contains('цифр') ||
-          low.contains('специаль') ||
-          low.contains('минимум') ||
-          low.contains('символ') ||
-          low.contains('последовательн') ||
-          low.contains('не должен содержать')) {
-        passwordMsgs.add(s);
-        continue;
-      }
-
-      // Правила для имени/username
-      if (low.contains('имя') || low.contains('username') || low.contains('ник')) {
-        nameMsgs.add(s);
-        continue;
-      }
-
-      // Остальное
-      otherMsgs.add(s);
-    }
-
-    // Обновим состояние и присвоим ошибки соответствующим полям
-    setState(() {
-      nameError = nameMsgs.isNotEmpty ? nameMsgs.join('\n') : null;
-      emailError = emailMsgs.isNotEmpty ? emailMsgs.join('\n') : null;
-      passwordError = passwordMsgs.isNotEmpty ? passwordMsgs.join('\n') : null;
-      confirmError = null; // обычно сервер не возвращает ошибку подтверждения
-    });
-
-    // Показать сводный SnackBar для остальных или всех ошибок
-    final List<String> sbList = [];
-    if (emailMsgs.isNotEmpty) sbList.addAll(emailMsgs);
-    if (passwordMsgs.isNotEmpty) sbList.addAll(passwordMsgs);
-    if (nameMsgs.isNotEmpty) sbList.addAll(nameMsgs);
-    if (otherMsgs.isNotEmpty) sbList.addAll(otherMsgs);
-
-    final sbText = sbList.isNotEmpty ? sbList.join('; ') : serverMessage;
-    if (sbText.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(sbText),
-          backgroundColor: const Color.fromARGB(255, 177, 42, 32),
-        ),
-      );
-    }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Ошибка соединения: $e"),
-        backgroundColor: Colors.red,
-      ),
-    );
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
-}
-
-
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 255, 35, 49),
-      // appBar: AppBar(
-      //   title: const Text(
-      //     "Регистрация",
-      //     style: TextStyle(
-      //       color: Colors.white,
-      //       fontSize: 20,
-      //       fontWeight: FontWeight.w600,
-      //     ),
-      //   ),
-      //   backgroundColor: Colors.indigo,
-      //   elevation: 0,
-      //   iconTheme: const IconThemeData(color: Colors.white),
-      // ),
+      backgroundColor: Colors.grey.shade50,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -257,15 +267,20 @@ Future<void> _register(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // Logo
                 Container(
                   width: 90,
                   height: 90,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    gradient: LinearGradient(
+                      colors: [Colors.blue.shade600, Colors.blue.shade400],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     borderRadius: BorderRadius.circular(22),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.blue.withOpacity(0.3),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
                       ),
@@ -274,7 +289,7 @@ Future<void> _register(
                   child: const Icon(
                     Icons.person_add_outlined,
                     size: 45,
-                    color: Color.fromARGB(255, 255, 35, 49),
+                    color: Colors.white,
                   ),
                 ),
 
@@ -283,9 +298,10 @@ Future<void> _register(
                 const Text(
                   "Создать аккаунт",
                   style: TextStyle(
-                    fontSize: 26,
+                    fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: Colors.black87,
+                    letterSpacing: 0.5,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -293,19 +309,20 @@ Future<void> _register(
                   "Заполните данные для регистрации",
                   style: TextStyle(
                     fontSize: 15,
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.grey.shade600,
                   ),
                 ),
 
                 const SizedBox(height: 32),
 
+                // Form card
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withOpacity(0.05),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
                       ),
@@ -315,35 +332,48 @@ Future<void> _register(
                     padding: const EdgeInsets.all(28),
                     child: Column(
                       children: [
+                        // Name field
                         TextField(
                           controller: nameController,
                           textInputAction: TextInputAction.next,
                           onChanged: (_) {
-                            if (nameError != null)
+                            if (nameError != null) {
                               setState(() => nameError = null);
+                            }
                           },
                           decoration: InputDecoration(
-                            prefixIcon: const Icon(
+                            prefixIcon: Icon(
                               Icons.person_outline,
-                              color: Color.fromARGB(255, 255, 35, 49),
+                              color: Colors.blue.shade600,
                             ),
                             labelText: "Имя",
                             errorText: nameError,
                             filled: true,
-                            fillColor: Colors.grey[50],
+                            fillColor: Colors.grey.shade50,
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(14),
                               borderSide: BorderSide.none,
                             ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: Colors.grey.shade200),
+                            ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                color: Color.fromARGB(255, 255, 35, 49),
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: Colors.blue.shade600,
                                 width: 2,
                               ),
                             ),
                             errorBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(
+                                color: Colors.red,
+                                width: 2,
+                              ),
+                            ),
+                            focusedErrorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
                               borderSide: const BorderSide(
                                 color: Colors.red,
                                 width: 2,
@@ -354,36 +384,49 @@ Future<void> _register(
 
                         const SizedBox(height: 16),
 
+                        // Email field
                         TextField(
                           controller: emailController,
                           keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
                           onChanged: (_) {
-                            if (emailError != null)
+                            if (emailError != null) {
                               setState(() => emailError = null);
+                            }
                           },
                           decoration: InputDecoration(
-                            prefixIcon: const Icon(
+                            prefixIcon: Icon(
                               Icons.email_outlined,
-                              color: Color.fromARGB(255, 255, 35, 49),
+                              color: Colors.blue.shade600,
                             ),
                             labelText: "Email",
                             errorText: emailError,
                             filled: true,
-                            fillColor: Colors.grey[50],
+                            fillColor: Colors.grey.shade50,
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(14),
                               borderSide: BorderSide.none,
                             ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: Colors.grey.shade200),
+                            ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                color: Color.fromARGB(255, 255, 35, 49),
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: Colors.blue.shade600,
                                 width: 2,
                               ),
                             ),
                             errorBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(
+                                color: Colors.red,
+                                width: 2,
+                              ),
+                            ),
+                            focusedErrorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
                               borderSide: const BorderSide(
                                 color: Colors.red,
                                 width: 2,
@@ -394,36 +437,49 @@ Future<void> _register(
 
                         const SizedBox(height: 16),
 
+                        // Password field
                         TextField(
                           controller: passwordController,
                           obscureText: _obscurePassword,
                           textInputAction: TextInputAction.next,
                           onChanged: (_) {
-                            if (passwordError != null)
+                            if (passwordError != null) {
                               setState(() => passwordError = null);
+                            }
                           },
                           decoration: InputDecoration(
-                            prefixIcon: const Icon(
+                            prefixIcon: Icon(
                               Icons.lock_outlined,
-                              color: Color.fromARGB(255, 255, 35, 49),
+                              color: Colors.blue.shade600,
                             ),
                             labelText: "Пароль",
                             errorText: passwordError,
                             filled: true,
-                            fillColor: Colors.grey[50],
+                            fillColor: Colors.grey.shade50,
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(14),
                               borderSide: BorderSide.none,
                             ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: Colors.grey.shade200),
+                            ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                color: Color.fromARGB(255, 255, 35, 49),
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: Colors.blue.shade600,
                                 width: 2,
                               ),
                             ),
                             errorBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(
+                                color: Colors.red,
+                                width: 2,
+                              ),
+                            ),
+                            focusedErrorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
                               borderSide: const BorderSide(
                                 color: Colors.red,
                                 width: 2,
@@ -434,7 +490,7 @@ Future<void> _register(
                                 _obscurePassword
                                     ? Icons.visibility_off_outlined
                                     : Icons.visibility_outlined,
-                                color: Colors.grey[600],
+                                color: Colors.grey.shade600,
                               ),
                               onPressed: () {
                                 setState(
@@ -447,13 +503,15 @@ Future<void> _register(
 
                         const SizedBox(height: 16),
 
+                        // Confirm password field
                         TextField(
                           controller: confirmController,
                           obscureText: _obscureConfirm,
                           textInputAction: TextInputAction.done,
                           onChanged: (_) {
-                            if (confirmError != null)
+                            if (confirmError != null) {
                               setState(() => confirmError = null);
+                            }
                           },
                           onSubmitted: (_) {
                             _register(
@@ -464,27 +522,38 @@ Future<void> _register(
                             );
                           },
                           decoration: InputDecoration(
-                            prefixIcon: const Icon(
+                            prefixIcon: Icon(
                               Icons.lock_outlined,
-                              color: Color.fromARGB(255, 255, 35, 49),
+                              color: Colors.blue.shade600,
                             ),
                             labelText: "Подтвердите пароль",
                             errorText: confirmError,
                             filled: true,
-                            fillColor: Colors.grey[50],
+                            fillColor: Colors.grey.shade50,
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(14),
                               borderSide: BorderSide.none,
                             ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: Colors.grey.shade200),
+                            ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                color: Color.fromARGB(255, 255, 35, 49),
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: Colors.blue.shade600,
                                 width: 2,
                               ),
                             ),
                             errorBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(
+                                color: Colors.red,
+                                width: 2,
+                              ),
+                            ),
+                            focusedErrorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
                               borderSide: const BorderSide(
                                 color: Colors.red,
                                 width: 2,
@@ -495,7 +564,7 @@ Future<void> _register(
                                 _obscureConfirm
                                     ? Icons.visibility_off_outlined
                                     : Icons.visibility_outlined,
-                                color: Colors.grey[600],
+                                color: Colors.grey.shade600,
                               ),
                               onPressed: () {
                                 setState(
@@ -508,21 +577,19 @@ Future<void> _register(
 
                         const SizedBox(height: 24),
 
+                        // Register button
                         SizedBox(
                           width: double.infinity,
                           height: 56,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color.fromARGB(
-                                255,
-                                255,
-                                35,
-                                49,
-                              ),
+                              backgroundColor: Colors.blue.shade600,
+                              foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(14),
                               ),
                               elevation: 0,
+                              disabledBackgroundColor: Colors.grey.shade300,
                             ),
                             onPressed: _isLoading
                                 ? null
@@ -548,23 +615,23 @@ Future<void> _register(
                                 : const Text(
                                     "Зарегистрироваться",
                                     style: TextStyle(
-                                      fontSize: 18,
+                                      fontSize: 16,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.white,
                                     ),
                                   ),
                           ),
                         ),
 
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 20),
 
+                        // Login link
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
                               "Уже есть аккаунт? ",
                               style: TextStyle(
-                                color: Colors.grey[700],
+                                color: Colors.grey.shade700,
                                 fontSize: 14,
                               ),
                             ),
@@ -577,10 +644,10 @@ Future<void> _register(
                                   horizontal: 4,
                                 ),
                               ),
-                              child: const Text(
+                              child: Text(
                                 "Войти",
                                 style: TextStyle(
-                                  color: Color.fromARGB(255, 255, 35, 49),
+                                  color: Colors.blue.shade600,
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -590,6 +657,33 @@ Future<void> _register(
                         ),
                       ],
                     ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // Info text
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue.shade100),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.privacy_tip_outlined, color: Colors.blue.shade700, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          "Ваши данные надёжно защищены и используются только для входа в систему",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue.shade900,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

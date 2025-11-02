@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/training.dart';
 
-const String API_BASE = String.fromEnvironment('API_BASE', defaultValue: 'http://localhost:5000');
+const String API_BASE = String.fromEnvironment('API_BASE', defaultValue: 'http://10.0.2.2:5000');
 
 class TrainingRunnerScreen extends StatefulWidget {
   final Training training;
@@ -19,13 +19,8 @@ class TrainingRunnerScreen extends StatefulWidget {
 
 class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
   int _currentIndex = 0;
-
-  // sceneId -> выбранный choiceId
   final Map<int, String> _answers = {};
-
-  // sceneId -> результат (selectedId, isCorrect, consequenceText, correctChoiceId)
   final Map<int, _AnswerResult> _results = {};
-
   late Timer _timer;
   int _elapsedSec = 0;
   bool _submitting = false;
@@ -55,9 +50,7 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
     return prefs.getString('token');
   }
 
-  // Мгновенная обработка выбора — отвечает сразу же
   void _handleTapChoice(int sceneId, String choiceId) {
-    // если уже отвечали на эту сцену — не позволяем менять ответ
     if (_results.containsKey(sceneId)) return;
 
     final scene = widget.training.scenes.firstWhere((s) => s.id == sceneId);
@@ -66,7 +59,6 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
 
     final isCorrect = selected.consequenceType == 'correct';
 
-    // сохраняем выбор и результат
     setState(() {
       _answers[sceneId] = choiceId;
       _results[sceneId] = _AnswerResult(
@@ -78,11 +70,22 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
       );
     });
 
-    // показываем небольшой SnackBar с результатом (опционально)
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(isCorrect ? 'Правильно' : 'Неправильно — показан правильный ответ'),
-        duration: const Duration(milliseconds: 900),
+        content: Row(
+          children: [
+            Icon(
+              isCorrect ? Icons.check_circle : Icons.cancel,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 8),
+            Text(isCorrect ? 'Правильно!' : 'Неправильно'),
+          ],
+        ),
+        backgroundColor: isCorrect ? Colors.green : Colors.red,
+        duration: const Duration(milliseconds: 1200),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -117,7 +120,6 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
 
     setState(() => _submitting = true);
 
-    // Собираем payload: если пользователь не выбрал вариант — используем defaultChoiceId
     final choicesPayload = widget.training.scenes.map((s) {
       final chosen = _answers[s.id] ?? s.defaultChoiceId;
       return {'sceneId': s.id, 'choiceId': chosen};
@@ -148,10 +150,8 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
       final Map<String, dynamic> data = json.decode(res.body) as Map<String, dynamic>;
       final result = data['result'] as Map<String, dynamic>?;
 
-      // Остановим таймер — попытка завершена
       _timer.cancel();
 
-      // Обновлённые статистики (если бэк вернул)
       final updatedStats = data['updatedStats'] as Map<String, dynamic>?;
 
       _showResultDialog(result, updatedStats);
@@ -166,252 +166,556 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
   }
 
   void _showResultDialog(Map<String, dynamic>? result, Map<String, dynamic>? updatedStats) {
-  final totalScore = result?['totalScore']?.toString() ?? '-';
-  final correctAnswers = result?['correctAnswers']?.toString() ?? '-';
-  final totalChoices = result?['totalChoices']?.toString() ?? '-';
-  final success = result?['success'] == true;
+    final totalScore = result?['totalScore']?.toString() ?? '-';
+    final correctAnswers = result?['correctAnswers']?.toString() ?? '-';
+    final totalChoices = result?['totalChoices']?.toString() ?? '-';
+    final success = result?['success'] == true;
 
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) {
-      return AlertDialog(
-        title: Text(success ? 'Успешно!' : 'Результат попытки'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
             children: [
-              Text('Очки: $totalScore'),
-              Text('Правильных: $correctAnswers / $totalChoices'),
-              const SizedBox(height: 8),
-              if (result?['details'] is List)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: (result!['details'] as List).map<Widget>((d) {
-                    final sceneId = d['sceneId']?.toString() ?? '?';
-                    final choiceId = d['choiceId']?.toString() ?? '-';
-                    final cons = d['consequenceType']?.toString() ?? '-';
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Text('Сцена $sceneId — выбор $choiceId — $cons'),
-                    );
-                  }).toList(),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: success ? Colors.green.shade50 : Colors.orange.shade50,
+                  shape: BoxShape.circle,
                 ),
-              const SizedBox(height: 8),
-              if (updatedStats != null) ...[
-                const Divider(),
-                const Text('Обновлённые статистики:', style: TextStyle(fontWeight: FontWeight.w600)),
-                Text('Попыток: ${updatedStats['attempts'] ?? '-'}'),
-                Text('Успехов: ${updatedStats['successes'] ?? '-'}'),
-                Text('Avg sec: ${updatedStats['avgTimeSec'] ?? '-'}'),
-              ]
+                child: Icon(
+                  success ? Icons.emoji_events : Icons.info_outline,
+                  color: success ? Colors.green.shade700 : Colors.orange.shade700,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(success ? 'Успешно!' : 'Результат'),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop(); // закрывает диалог
-              Navigator.of(context).pop(); // закрывает TrainingRunnerScreen
-              context.go('/profile'); // переход на /mytrainings через GoRouter
-            },
-            child: const Text('Закрыть'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _ResultStat(
+                            icon: Icons.stars,
+                            label: 'Очки',
+                            value: totalScore,
+                            color: Colors.blue,
+                          ),
+                          _ResultStat(
+                            icon: Icons.check_circle,
+                            label: 'Верно',
+                            value: '$correctAnswers/$totalChoices',
+                            color: Colors.green,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (updatedStats != null) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Общая статистика',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _StatsRow(
+                    icon: Icons.replay,
+                    label: 'Попыток',
+                    value: updatedStats['attempts']?.toString() ?? '-',
+                  ),
+                  _StatsRow(
+                    icon: Icons.emoji_events,
+                    label: 'Успехов',
+                    value: updatedStats['successes']?.toString() ?? '-',
+                  ),
+                  _StatsRow(
+                    icon: Icons.timer,
+                    label: 'Среднее время',
+                    value: '${updatedStats['avgTimeSec'] ?? '-'}с',
+                  ),
+                ],
+              ],
+            ),
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              // если захотим пройти ещё раз — сбросим
-              setState(() {
-                _answers.clear();
-                _results.clear();
-                _elapsedSec = 0;
-                _startTimer();
-                _submitting = false;
-              });
-            },
-            child: const Text('Пройти ещё раз'),
-          )
-        ],
-      );
-    },
-  );
-}
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).pop();
+                context.go('/profile');
+              },
+              child: const Text('Закрыть'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                setState(() {
+                  _answers.clear();
+                  _results.clear();
+                  _elapsedSec = 0;
+                  _currentIndex = 0;
+                  _startTimer();
+                  _submitting = false;
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Пройти ещё раз'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _formatTime(int sec) {
+    final m = sec ~/ 60;
+    final s = sec % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final scenes = widget.training.scenes;
     final scene = scenes[_currentIndex];
     final answeredCount = _results.length;
     final total = scenes.length;
-
-    String formatTime(int sec) {
-      final m = sec ~/ 60;
-      final s = sec % 60;
-      return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-    }
+    final progress = answeredCount / total;
 
     return Scaffold(
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         title: Text(widget.training.title),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(28),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Row(
+        backgroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: Column(
+        children: [
+          // Progress indicator
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Column(
               children: [
-                const SizedBox(width: 12),
-                Text('Прогресс: $answeredCount / $total'),
-                const Spacer(),
-                Text('Время: ${formatTime(_elapsedSec)}'),
-                const SizedBox(width: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.article, size: 16, color: Colors.blue.shade700),
+                              const SizedBox(width: 6),
+                              Text(
+                                '$answeredCount / $total',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue.shade700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.timer, size: 16, color: Colors.orange.shade700),
+                          const SizedBox(width: 6),
+                          Text(
+                            _formatTime(_elapsedSec),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.orange.shade700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 6,
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
+                  ),
+                ),
               ],
             ),
           ),
-        ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          children: [
-            // сцена заголовок и описание
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Сцена ${scene.id}: ${scene.title}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    Text(scene.description),
-                    if (scene.hint.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text('Подсказка: ${scene.hint}', style: const TextStyle(fontStyle: FontStyle.italic)),
-                    ]
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            // варианты — теперь тап отвечает сразу
-            Expanded(
-              child: ListView.builder(
-                itemCount: scene.choices.length,
-                itemBuilder: (ctx, i) {
-                  final c = scene.choices[i];
 
-                  // текущий результат этой сцены (если уже отвечали)
-                  final res = _results[scene.id];
-
-                  // определяем визуальные состояния
-                  bool isSelected = _answers[scene.id] == c.id;
-                  bool isCorrectChoice = c.consequenceType == 'correct';
-                  Color? tileColor;
-                  Widget? leading;
-
-                  if (res == null) {
-                    // ещё не отвечали — обычный вид с радиомаркером
-                    leading = Radio<String>(
-                      value: c.id,
-                      groupValue: _answers[scene.id],
-                      onChanged: (v) {
-                        if (v != null) _handleTapChoice(scene.id, v);
-                      },
-                    );
-                    tileColor = null;
-                  } else {
-                    // уже отвечали — показываем результат:
-                    if (isSelected && res.isCorrect) {
-                      // выбран и правильный
-                      leading = const Icon(Icons.check_circle, color: Colors.green);
-                      tileColor = Colors.green.withOpacity(0.12);
-                    } else if (isSelected && !res.isCorrect) {
-                      // выбран и неверный
-                      leading = const Icon(Icons.cancel, color: Colors.red);
-                      tileColor = Colors.red.withOpacity(0.08);
-                    } else if (isCorrectChoice) {
-                      // не выбранный, но правильный — подчеркнём
-                      leading = const Icon(Icons.check_circle_outline, color: Colors.green);
-                      tileColor = Colors.green.withOpacity(0.06);
-                    } else {
-                      leading = const SizedBox(width: 24); // пустое место
-                      tileColor = null;
-                    }
-                  }
-
-                  return Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    child: ListTile(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      tileColor: tileColor,
-                      onTap: () => _handleTapChoice(scene.id, c.id),
-                      leading: leading,
-                      title: Text(c.text),
-                      // не показываем consequenceText в самом tile до выбора
-                      // удаляем показ scoreDelta (secondary)
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // После вариантов показываем consequenceText выбранного варианта (если есть),
-            // и при неверном ответе — показываем правильный вариант и его текст.
-            const SizedBox(height: 8),
-            if (_results.containsKey(scene.id)) ...[
-              Card(
-                color: _results[scene.id]!.isCorrect ? Colors.green.withOpacity(0.08) : Colors.red.withOpacity(0.04),
-                child: Padding(
-                  padding: const EdgeInsets.all(10.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // consequenceText выбранного варианта
-                      if (_results[scene.id]!.consequenceText.isNotEmpty) ...[
-                        Text(
-                          _results[scene.id]!.consequenceText,
-                          style: const TextStyle(fontSize: 14),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Scene card
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
                         ),
-                        const SizedBox(height: 8),
                       ],
-                      if (!_results[scene.id]!.isCorrect) ...[
-                        const Divider(),
-                        Text('Правильный ответ: ${_results[scene.id]!.correctChoiceId} — ${_results[scene.id]!.correctChoiceText}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                      ]
-                    ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '${scene.id}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.blue.shade700,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                scene.title,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          scene.description,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade700,
+                            height: 1.5,
+                          ),
+                        ),
+                        if (scene.hint.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.lightbulb, size: 18, color: Colors.amber.shade700),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    scene.hint,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.amber.shade900,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                ),
-              ),
-            ],
 
-            const SizedBox(height: 8),
-            // навигация и submit
-            Row(
-              children: [
-                OutlinedButton(
-                  onPressed: _currentIndex > 0 ? _goPrev : null,
-                  child: const Text('Назад'),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _currentIndex < total - 1 ? _goNext : null,
-                    child: Text(_currentIndex < total - 1 ? 'Далее' : 'Последняя сцена'),
+                  const SizedBox(height: 16),
+
+                  // Choices
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: scene.choices.length,
+                    itemBuilder: (ctx, i) {
+                      final c = scene.choices[i];
+                      final res = _results[scene.id];
+                      bool isSelected = _answers[scene.id] == c.id;
+                      bool isCorrectChoice = c.consequenceType == 'correct';
+                      
+                      Color? bgColor;
+                      Color? borderColor;
+                      Widget? leading;
+
+                      if (res == null) {
+                        bgColor = Colors.white;
+                        borderColor = isSelected ? Colors.blue : Colors.grey.shade300;
+                        leading = Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isSelected ? Colors.blue : Colors.grey.shade400,
+                              width: 2,
+                            ),
+                            color: isSelected ? Colors.blue : Colors.transparent,
+                          ),
+                          child: isSelected
+                              ? const Icon(Icons.check, size: 16, color: Colors.white)
+                              : null,
+                        );
+                      } else {
+                        if (isSelected && res.isCorrect) {
+                          bgColor = Colors.green.shade50;
+                          borderColor = Colors.green;
+                          leading = const Icon(Icons.check_circle, color: Colors.green, size: 24);
+                        } else if (isSelected && !res.isCorrect) {
+                          bgColor = Colors.red.shade50;
+                          borderColor = Colors.red;
+                          leading = const Icon(Icons.cancel, color: Colors.red, size: 24);
+                        } else if (isCorrectChoice) {
+                          bgColor = Colors.green.shade50;
+                          borderColor = Colors.green.shade300;
+                          leading = const Icon(Icons.check_circle_outline, color: Colors.green, size: 24);
+                        } else {
+                          bgColor = Colors.white;
+                          borderColor = Colors.grey.shade300;
+                          leading = const SizedBox(width: 24);
+                        }
+                      }
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: borderColor!, width: 2),
+                          boxShadow: [
+                            if (res == null)
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                          ],
+                        ),
+                        child: InkWell(
+                          onTap: () => _handleTapChoice(scene.id, c.id),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Row(
+                              children: [
+                                leading!,
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    c.text,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
+
+                  // Result feedback
+                  if (_results.containsKey(scene.id)) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: _results[scene.id]!.isCorrect
+                            ? Colors.green.shade50
+                            : Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _results[scene.id]!.isCorrect
+                              ? Colors.green.shade200
+                              : Colors.red.shade200,
+                          width: 1,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_results[scene.id]!.consequenceText.isNotEmpty) ...[
+                            Text(
+                              _results[scene.id]!.consequenceText,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: _results[scene.id]!.isCorrect
+                                    ? Colors.green.shade900
+                                    : Colors.red.shade900,
+                              ),
+                            ),
+                          ],
+                          if (!_results[scene.id]!.isCorrect) ...[
+                            const SizedBox(height: 8),
+                            const Divider(),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(Icons.info_outline, size: 18, color: Colors.red.shade700),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Правильный ответ:',
+                                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _results[scene.id]!.correctChoiceText,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          // Bottom navigation
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -2),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _submitting ? null : _submitAttempt,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
-                    child: _submitting
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Отправить'),
-                  ),
-                )
               ],
-            )
-          ],
-        ),
+            ),
+            child: SafeArea(
+              child: Row(
+                children: [
+                  OutlinedButton(
+                    onPressed: _currentIndex > 0 ? _goPrev : null,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      side: BorderSide(color: Colors.grey.shade300),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Icon(Icons.arrow_back),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _currentIndex < total - 1 ? _goNext : null,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        disabledBackgroundColor: Colors.grey.shade300,
+                      ),
+                      child: Text(
+                        _currentIndex < total - 1 ? 'Далее' : 'Последняя',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _submitting ? null : _submitAttempt,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.send),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -431,4 +735,89 @@ class _AnswerResult {
     required this.correctChoiceId,
     required this.correctChoiceText,
   });
+}
+
+class _ResultStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _ResultStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 24),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatsRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _StatsRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.grey.shade600),
+          const SizedBox(width: 8),
+          Text(
+            '$label:',
+            style: TextStyle(
+              color: Colors.grey.shade700,
+              fontSize: 13,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

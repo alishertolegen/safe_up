@@ -7,9 +7,8 @@ import 'TrainingDetailScreen.dart';
 
 const String API_BASE = String.fromEnvironment(
   'API_BASE',
-  defaultValue: 'http://localhost:5000',
+  defaultValue: 'http://10.0.2.2:5000',
 );
-// Примечание: для Android-эмулятора обычно используйте http://10.0.2.2:5000 в переменной окружения API_BASE
 
 class MyTrainingsScreen extends StatefulWidget {
   const MyTrainingsScreen({super.key});
@@ -20,6 +19,28 @@ class MyTrainingsScreen extends StatefulWidget {
 
 class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
   late Future<List<Training>> _futureTrainings;
+
+  // Icons for training types
+  final Map<String, String> _typeIcons = {
+    'пожар': '🔥',
+    'землетрясение': '🌍',
+    'наводнение': '🌊',
+    'газовая_утечка': '💨',
+    'иное': '⚠️',
+  };
+
+  // Colors for difficulty
+  final Map<String, Color> _difficultyColors = {
+    'easy': Colors.green,
+    'medium': Colors.orange,
+    'hard': Colors.red,
+  };
+
+  final Map<String, String> _difficultyLabels = {
+    'easy': 'Лёгкий',
+    'medium': 'Средний',
+    'hard': 'Сложный',
+  };
 
   @override
   void initState() {
@@ -58,7 +79,6 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
     }
 
     final List<dynamic> data = json.decode(res.body) as List<dynamic>;
-    // Используем фабрику из модели
     final list = data
         .where((e) => e is Map<String, dynamic> || e is Map)
         .map<Training>((e) => Training.fromJson(Map<String, dynamic>.from(e as Map)))
@@ -70,7 +90,6 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
     setState(() {
       _futureTrainings = _fetchTrainings();
     });
-    // ждём завершения, чтобы RefreshIndicator закрывался корректно
     await _futureTrainings;
   }
 
@@ -80,75 +99,333 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          children: [
-            const Text('Мои тренировки',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            Expanded(
-              child: FutureBuilder<List<Training>>(
-                future: _futureTrainings,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('Ошибка: ${snapshot.error}', textAlign: TextAlign.center),
-                          const SizedBox(height: 8),
-                          ElevatedButton(
-                            onPressed: () => setState(() => _futureTrainings = _fetchTrainings()),
-                            child: const Text('Повторить'),
-                          )
-                        ],
-                      ),
-                    );
-                  }
+  String _getTypeIcon(String type) {
+    return _typeIcons[type.toLowerCase()] ?? '⚠️';
+  }
 
-                  final list = snapshot.data ?? [];
-                  if (list.isEmpty) {
-                    return const Center(child: Text('Тренировок ещё нет. Создайте первую.'));
-                  }
+  Color _getDifficultyColor(String difficulty) {
+    return _difficultyColors[difficulty.toLowerCase()] ?? Colors.grey;
+  }
 
-                  return RefreshIndicator(
-                    onRefresh: _refresh,
-                    child: ListView.separated(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      itemCount: list.length,
-                      separatorBuilder: (_, __) => const Divider(),
-                      itemBuilder: (context, i) {
-                        final t = list[i];
-                        final locName = t.location.name.isNotEmpty ? t.location.name : (t.location.floor.isNotEmpty ? t.location.floor : '-');
-                        final dateStr =
-                            '${t.createdAt.day.toString().padLeft(2, '0')}.${t.createdAt.month.toString().padLeft(2, '0')}.${t.createdAt.year}';
-                        return ListTile(
-                          title: Text(t.title),
-                          subtitle: Text('${t.type} • $locName • ${t.difficulty}'),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text('${t.lastScorePercent.toStringAsFixed(0)}%'),
-                              const SizedBox(height: 4),
-                              Text(dateStr, style: const TextStyle(fontSize: 11)),
-                            ],
-                          ),
-                          onTap: () => _openDetail(context, t),
-                        );
-                      },
-                    ),
-                  );
-                },
-              ),
+  String _getDifficultyLabel(String difficulty) {
+    return _difficultyLabels[difficulty.toLowerCase()] ?? difficulty;
+  }
+
+  Widget _buildTrainingCard(Training t) {
+    final locName = t.location.name.isNotEmpty 
+        ? t.location.name 
+        : (t.location.floor.isNotEmpty ? t.location.floor : 'Без локации');
+    final dateStr = '${t.createdAt.day.toString().padLeft(2, '0')}.${t.createdAt.month.toString().padLeft(2, '0')}.${t.createdAt.year}';
+    final scorePercent = t.lastScorePercent.toStringAsFixed(0);
+    final difficultyColor = _getDifficultyColor(t.difficulty);
+    final difficultyLabel = _getDifficultyLabel(t.difficulty);
+
+    return InkWell(
+      onTap: () => _openDetail(context, t),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
             ),
           ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                // Type icon
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _getTypeIcon(t.type),
+                      style: const TextStyle(fontSize: 24),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                
+                // Title and metadata
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        t.title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.calendar_today, size: 12, color: Colors.grey.shade600),
+                          const SizedBox(width: 4),
+                          Text(
+                            dateStr,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Score badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _getScoreColor(t.lastScorePercent).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _getScoreIcon(t.lastScorePercent),
+                        size: 16,
+                        color: _getScoreColor(t.lastScorePercent),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$scorePercent%',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _getScoreColor(t.lastScorePercent),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Location and difficulty chips
+            Row(
+              children: [
+                // Location
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.location_on, size: 14, color: Colors.grey.shade700),
+                      const SizedBox(width: 4),
+                      Text(
+                        locName,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                
+                // Difficulty
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: difficultyColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    difficultyLabel,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: difficultyColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getScoreColor(double score) {
+    if (score >= 80) return Colors.green;
+    if (score >= 60) return Colors.orange;
+    return Colors.red;
+  }
+
+  IconData _getScoreIcon(double score) {
+    if (score >= 80) return Icons.check_circle;
+    if (score >= 60) return Icons.info;
+    return Icons.warning;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50,
+      appBar: AppBar(
+        title: const Text('Мои тренировки'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: FutureBuilder<List<Training>>(
+          future: _futureTrainings,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            
+            if (snapshot.hasError) {
+              return Center(
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  margin: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Ошибка',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade900,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${snapshot.error}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () => setState(() => _futureTrainings = _fetchTrainings()),
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Повторить'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            final list = snapshot.data ?? [];
+            
+            if (list.isEmpty) {
+              return Center(
+                child: Container(
+                  padding: const EdgeInsets.all(32),
+                  margin: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.fitness_center,
+                          size: 40,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Тренировок пока нет',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade900,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Создайте свою первую тренировку',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: list.length,
+                itemBuilder: (context, i) => _buildTrainingCard(list[i]),
+              ),
+            );
+          },
         ),
       ),
     );

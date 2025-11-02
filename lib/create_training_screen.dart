@@ -6,9 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Задавай API_BASE через --dart-define=API_BASE or оставь дефолт
 const String apiBase = String.fromEnvironment('API_BASE',
-    defaultValue: 'http://localhost:5000');
+    defaultValue: 'http://10.0.2.2:5000');
 
 class CreateTrainingScreen extends StatefulWidget {
   const CreateTrainingScreen({super.key});
@@ -21,35 +20,32 @@ class _CreateTrainingScreenState extends State<CreateTrainingScreen> {
   final _titleController = TextEditingController();
   final _otherLocationController = TextEditingController();
 
-  // UI state
   String _selectedType = 'пожар';
-  String _selectedLocation = 'Офис'; // values: predefined names + "🎲 Случайная" + "Другое"
-  String _selectedDifficulty = 'medium'; // easy | medium | hard
+  String _selectedLocation = 'Офис';
+  String _selectedDifficulty = 'medium';
   bool _isLoading = false;
 
-  // preset lists
   final List<Map<String, String>> _types = [
-    {'key': 'пожар', 'label': 'Пожар'},
-    {'key': 'землетрясение', 'label': 'Землетрясение'},
-    {'key': 'наводнение', 'label': 'Наводнение'},
-    {'key': 'газовая_утечка', 'label': 'Газовая утечка'},
-    {'key': 'иное', 'label': 'Иное'},
+    {'key': 'пожар', 'label': 'Пожар', 'icon': '🔥'},
+    {'key': 'землетрясение', 'label': 'Землетрясение', 'icon': '🌍'},
+    {'key': 'наводнение', 'label': 'Наводнение', 'icon': '🌊'},
+    {'key': 'газовая_утечка', 'label': 'Газовая утечка', 'icon': '💨'},
+    {'key': 'иное', 'label': 'Иное', 'icon': '⚠️'},
   ];
 
-  final List<String> _locationOptions = [
-    'Офис',
-    'Дом',
-    'Школа',
-    'Улица',
-    '🎲 Случайная',
-    'Другое'
+  final List<Map<String, String>> _locationOptions = [
+    {'value': 'Офис', 'icon': '🏢'},
+    {'value': 'Дом', 'icon': '🏠'},
+    {'value': 'Школа', 'icon': '🏫'},
+    {'value': 'Улица', 'icon': '🛣️'},
+    {'value': '🎲 Случайная', 'icon': '🎲'},
+    {'value': 'Другое', 'icon': '📍'},
   ];
 
-  // difficulty mapping for display
-  final Map<String, String> _difficultyLabels = {
-    'easy': 'Лёгкий',
-    'medium': 'Средний',
-    'hard': 'Сложный'
+  final Map<String, Map<String, dynamic>> _difficultyData = {
+    'easy': {'label': 'Лёгкий', 'color': Colors.green, 'icon': '😊'},
+    'medium': {'label': 'Средний', 'color': Colors.orange, 'icon': '😐'},
+    'hard': {'label': 'Сложный', 'color': Colors.red, 'icon': '😰'}
   };
 
   @override
@@ -74,41 +70,27 @@ class _CreateTrainingScreenState extends State<CreateTrainingScreen> {
         return;
       }
 
-      // Build payload
       final String? titleInput = _titleController.text.trim().isEmpty
           ? null
           : _titleController.text.trim();
 
       final Map<String, dynamic> payload = {};
-
-      // Always ask AI to generate content (allows sending only type/location/difficulty)
       payload['aiGenerate'] = true;
 
-      // include title if user provided it
       if (titleInput != null) payload['title'] = titleInput;
-
-      // type (use backend-friendly lowercase key)
       if (_selectedType.isNotEmpty) payload['type'] = _selectedType;
-
-      // difficulty (already stored as backend value)
       payload['difficulty'] = _selectedDifficulty;
 
-      // location logic:
-      // - if user selected 🎲 Случайная -> omit location so backend will invent one
-      // - if user selected 'Другое' -> use text from _otherLocationController if provided
-      // - otherwise include selected location name
       if (_selectedLocation == '🎲 Случайная') {
-        // omit location entirely
+        // omit location
       } else if (_selectedLocation == 'Другое') {
         final other = _otherLocationController.text.trim();
         if (other.isNotEmpty) {
-          payload['location'] = { 'name': other };
+          payload['location'] = {'name': other};
         }
       } else {
-        payload['location'] = { 'name': _selectedLocation };
+        payload['location'] = {'name': _selectedLocation};
       }
-
-      // optional: let user tune scenes count in the future; for now we rely on server DEFAULT_SCENES
 
       final uri = Uri.parse('$apiBase/trainings');
       final resp = await http.post(
@@ -124,14 +106,12 @@ class _CreateTrainingScreenState extends State<CreateTrainingScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Тренировка успешно сгенерирована')));
-        // navigate to MyTrainings
         if (mounted) context.go('/mytrainings');
       } else if (resp.statusCode == 401 || resp.statusCode == 403) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Неавторизован. Пожалуйста, войдите.')));
       } else {
-        // try parse body message
         String msg = 'Сервер вернул ${resp.statusCode}.';
         try {
           final body = resp.body.isNotEmpty ? jsonDecode(resp.body) : null;
@@ -141,8 +121,6 @@ class _CreateTrainingScreenState extends State<CreateTrainingScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $msg')));
       }
     } catch (e, st) {
-      // debug print
-      // ignore: avoid_print
       print('Create training error: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -155,17 +133,42 @@ class _CreateTrainingScreenState extends State<CreateTrainingScreen> {
 
   Widget _buildTypeSelector() {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 10,
+      runSpacing: 10,
       children: _types.map((t) {
         final key = t['key']!;
         final label = t['label']!;
+        final icon = t['icon']!;
         final selected = key == _selectedType;
-        return ChoiceChip(
-          label: Text(label),
-          selected: selected,
-          onSelected: (_) => setState(() => _selectedType = key),
-          selectedColor: Colors.blue.shade700,
+        
+        return InkWell(
+          onTap: () => setState(() => _selectedType = key),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: selected ? Colors.blue.shade50 : Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected ? Colors.blue : Colors.transparent,
+                width: 2,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(icon, style: const TextStyle(fontSize: 20)),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    color: selected ? Colors.blue.shade900 : Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       }).toList(),
     );
@@ -176,24 +179,64 @@ class _CreateTrainingScreenState extends State<CreateTrainingScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: 10,
+          runSpacing: 10,
           children: _locationOptions.map((loc) {
-            final selected = loc == _selectedLocation;
-            return ChoiceChip(
-              label: Text(loc),
-              selected: selected,
-              onSelected: (_) => setState(() => _selectedLocation = loc),
+            final value = loc['value']!;
+            final icon = loc['icon']!;
+            final selected = value == _selectedLocation;
+            
+            return InkWell(
+              onTap: () => setState(() => _selectedLocation = value),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: selected ? Colors.blue.shade50 : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected ? Colors.blue : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(icon, style: const TextStyle(fontSize: 20)),
+                    const SizedBox(width: 8),
+                    Text(
+                      value,
+                      style: TextStyle(
+                        fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                        color: selected ? Colors.blue.shade900 : Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             );
           }).toList(),
         ),
         if (_selectedLocation == 'Другое') ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           TextField(
             controller: _otherLocationController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Введите локацию',
-              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.grey.shade50,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.blue, width: 2),
+              ),
             ),
           )
         ]
@@ -203,20 +246,44 @@ class _CreateTrainingScreenState extends State<CreateTrainingScreen> {
 
   Widget _buildDifficultySelector() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: _difficultyLabels.keys.map((k) {
-        final label = _difficultyLabels[k]!;
+      children: _difficultyData.keys.map((k) {
+        final data = _difficultyData[k]!;
+        final label = data['label'] as String;
+        final color = data['color'] as Color;
+        final icon = data['icon'] as String;
+        final selected = _selectedDifficulty == k;
+        
         return Expanded(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6.0),
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                foregroundColor: _selectedDifficulty == k ? Colors.white : Colors.black87,
-                backgroundColor: _selectedDifficulty == k ? Colors.blue : Colors.grey.shade200,
-                elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: InkWell(
+              onTap: () => setState(() => _selectedDifficulty = k),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  color: selected ? color.withOpacity(0.15) : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected ? color : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Text(icon, style: const TextStyle(fontSize: 24)),
+                    const SizedBox(height: 4),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                        color: selected ? color : Colors.black87,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              onPressed: () => setState(() => _selectedDifficulty = k),
-              child: Text(label),
             ),
           ),
         );
@@ -226,55 +293,249 @@ class _CreateTrainingScreenState extends State<CreateTrainingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Создать тренировку'),
-        ),
-        body: Padding(
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50,
+      appBar: AppBar(
+        title: const Text('Создать тренировку'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Название (опционально)', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  hintText: 'Например: Пожар в офисе QazTech',
-                  border: OutlineInputBorder(),
+              // Title card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.edit_outlined, color: Colors.blue, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Название (опционально)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _titleController,
+                      decoration: InputDecoration(
+                        hintText: 'Например: Пожар в офисе QazTech',
+                        hintStyle: TextStyle(color: Colors.grey.shade400),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-
-              const Text('Тип чрезвычайной ситуации', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              _buildTypeSelector(),
 
               const SizedBox(height: 16),
-              const Text('Локация', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              _buildLocationSelector(),
+
+              // Type card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Тип чрезвычайной ситуации',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildTypeSelector(),
+                  ],
+                ),
+              ),
 
               const SizedBox(height: 16),
-              const Text('Сложность', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              _buildDifficultySelector(),
 
-              const Spacer(),
+              // Location card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.location_on_outlined, color: Colors.red, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Локация',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildLocationSelector(),
+                  ],
+                ),
+              ),
 
+              const SizedBox(height: 16),
+
+              // Difficulty card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.fitness_center_outlined, color: Colors.purple, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Сложность',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDifficultySelector(),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Create button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _createTraining,
-                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    disabledBackgroundColor: Colors.grey.shade300,
+                  ),
                   child: _isLoading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Создать тренировку', style: TextStyle(fontSize: 16)),
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Создать тренировку',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
+
               const SizedBox(height: 12),
-              const Text('Подсказка: можно отправить только тип и/или локацию — ИИ сам сгенерирует остальное.', style: TextStyle(color: Colors.black54)),
+
+              // Hint
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.lightbulb_outline, color: Colors.blue.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Можно отправить только тип и/или локацию — ИИ сам сгенерирует остальное',
+                        style: TextStyle(
+                          color: Colors.blue.shade900,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
             ],
           ),
         ),
