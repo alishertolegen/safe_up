@@ -108,7 +108,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final url = Uri.parse('https://safe-up.onrender.com/reset-password');
+      final url = Uri.parse('http://10.0.2.2:5000/reset-password');
       final resp = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},

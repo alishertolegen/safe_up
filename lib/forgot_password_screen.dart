@@ -55,7 +55,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final url = Uri.parse('https://safe-up.onrender.com/forgot-password');
+      final url = Uri.parse('http://10.0.2.2:5000/forgot-password');
       final resp = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},

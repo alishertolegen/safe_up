@@ -58,7 +58,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
 
       final res = await http.get(
-        Uri.parse("https://safe-up.onrender.com/profile"),
+        Uri.parse("http://10.0.2.2:5000/profile"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",

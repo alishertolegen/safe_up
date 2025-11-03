@@ -7,7 +7,7 @@ import 'TrainingDetailScreen.dart';
 
 const String API_BASE = String.fromEnvironment(
   'API_BASE',
-  defaultValue: 'https://safe-up.onrender.com',
+  defaultValue: 'http://10.0.2.2:5000',
 );
 
 class MyTrainingsScreen extends StatefulWidget {
