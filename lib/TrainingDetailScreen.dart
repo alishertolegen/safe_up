@@ -1,4 +1,3 @@
-// lib/screens/training_detail_screen.dart
 import 'package:flutter/material.dart';
 import '../models/training.dart';
 import 'training_runner_screen.dart';

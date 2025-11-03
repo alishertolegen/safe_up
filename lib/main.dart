@@ -247,5 +247,5 @@ int _calculateSelectedIndex(GoRouterState state) {
   if (location.startsWith('/profile')) return 3;
   if (location.startsWith('/mytrainings')) return 2;
   if (location.startsWith('/create')) return 1;
-  return 0; // /home and others
+  return 0; 
 }

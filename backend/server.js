@@ -29,22 +29,21 @@ const userSchema = new mongoose.Schema({
   stats: {
     totalAttempts: { type: Number, default: 0 },
     successes: { type: Number, default: 0 },
-    avgScore: { type: Number, default: 0 },   // можно пересчитывать при каждой попытке
+    avgScore: { type: Number, default: 0 }, 
     totalTimeSec: { type: Number, default: 0 }
   },
   achievements: [
     {
-      code: String,      // машинный код бейджа, например "fire_master_1"
-      title: String,     // человекочитаемое название
+      code: String,      
+      title: String,     
       earnedAt: Date
     }
   ],
-    // --- поля для сброса пароля ---
-  passwordResetCode: { type: String, default: null, select: false }, // хранится хеш кода (sha256)
+  passwordResetCode: { type: String, default: null, select: false }, // хеш кода (sha256)
   passwordResetExpires: { type: Date, default: null, select: false },
-    // ---
-  lastActiveAt: { type: Date, default: Date.now } // обновлять при логине/действии
-}, { timestamps: true }); // createdAt / updatedAt автоматически
+
+  lastActiveAt: { type: Date, default: Date.now } 
+}, { timestamps: true });
 
 const User = mongoose.model("User", userSchema);
 
@@ -153,9 +152,7 @@ function extractJsonArray(text) {
   throw new Error('No JSON array found in model output');
 }
 
-// Попытка извлечь первый валидный JSON-объект из текста (на случай, если модель вернёт объект)
 function extractJsonObject(text) {
-  // Try parse whole text first
   try {
     return JSON.parse(text);
   } catch (e) {}
@@ -226,12 +223,10 @@ Return exactly one JSON object. Use ${choicesPerScene} choices per scene. Make o
 
   try {
     const text = await callRouter(body);
-    // Try parse object first, fallback to array-based parsing inside scenes
     let parsed = null;
     try {
       parsed = extractJsonObject(text);
     } catch (e) {
-      // as a last resort, try find array and wrap into object
       try {
         const arr = extractJsonArray(text);
         parsed = { title: title || '', summary: '', location: {}, difficulty: 'medium', scenes: arr };
@@ -265,7 +260,6 @@ Return exactly one JSON object. Use ${choicesPerScene} choices per scene. Make o
       }) : []
     };
 
-    // If scenes are missing or count mismatch, fallback to local generator
     if (!Array.isArray(result.scenes) || result.scenes.length < 1) {
       throw new Error('No scenes produced by model');
     }
@@ -286,14 +280,14 @@ Return exactly one JSON object. Use ${choicesPerScene} choices per scene. Make o
 }
 
 
-/** Local fallback: simple skeleton (titles only) */
+/** фолбэк простой скелетон только title */
 function simpleGenerateScenesSkeleton(title, scenesCount = 5, choicesPerScene = 3) {
   const base = (title || "Сценарий").trim();
   const scenes = [];
   for (let i = 1; i <= scenesCount; i++) {
     const choices = [];
     for (let c = 0; c < choicesPerScene; c++) {
-      const id = String.fromCharCode(97 + c); // a, b, c...
+      const id = String.fromCharCode(97 + c); // a, b, c... варианттар
       choices.push({
         id,
         text: `Вариант ${id.toUpperCase()} для сцены ${i}`,
@@ -314,7 +308,7 @@ function simpleGenerateScenesSkeleton(title, scenesCount = 5, choicesPerScene = 
   return scenes;
 }
 
-/** Local full fallback (theory + practice style -> here: descriptions + choices) */
+/** полный фолбэк  */
 function simpleGenerateScenes(title, scenesCount = 5, choicesPerScene = 3) {
   const base = (title || "Сценарий").trim();
   const scenes = [];
@@ -343,7 +337,7 @@ function simpleGenerateScenes(title, scenesCount = 5, choicesPerScene = 3) {
   return scenes;
 }
 
-/** Generate scenes via HF Router */
+/** Генерация сцен HF Router */
 async function generateScenesHf(title, scenesCount = 5, choicesPerScene = 3) {
   const model = process.env.HF_MODEL;
   const systemMsg = 'You are an assistant that outputs ONLY valid JSON arrays. Use concise Russian. No extra text.';
@@ -382,7 +376,7 @@ Example element:
     const text = await callRouter(body);
     const parsed = extractJsonArray(text);
     if (!Array.isArray(parsed)) throw new Error('Parsed not array');
-    // Normalize parsed items
+    // Normalize 
     const scenes = parsed.map((it, idx) => {
       const choices = Array.isArray(it.choices) ? it.choices.map((c, ci) => ({
         id: String(c.id || String.fromCharCode(97 + ci)),
@@ -403,13 +397,13 @@ Example element:
     return scenes;
   } catch (err) {
     console.warn('generateScenesHf failed, using fallback:', err.message || err);
-    // fallback to full generator
+    // фолбэк на полную генерацию
     return simpleGenerateScenes(title, scenesCount, choicesPerScene);
   }
 }
 
 /**
- * Auth routes (register/login) and users/profile
+ * Маршруты Авторизации
  */
 function validatePassword(password, { username = '', email = '' } = {}) {
   const errors = [];
@@ -427,8 +421,8 @@ function validatePassword(password, { username = '', email = '' } = {}) {
   }
 
   const low = password.toLowerCase();
-
-  // Запрет включать часть email (локальную) или полный email
+  // Запреты на пароль:
+  // Запрет: часть email или полный email
   if (email && typeof email === 'string') {
     const emailLow = email.toLowerCase();
     const localPart = emailLow.split('@')[0] || '';
@@ -440,7 +434,7 @@ function validatePassword(password, { username = '', email = '' } = {}) {
     }
   }
 
-  // Запрет включать username
+  // Запрет: username
   if (username && typeof username === 'string') {
     const u = username.toLowerCase().trim();
     if (u.length >= 3 && low.includes(u)) {
@@ -448,7 +442,7 @@ function validatePassword(password, { username = '', email = '' } = {}) {
     }
   }
 
-  // Простые запрещённые последовательности
+  // Запрет на самые распрастроненные пароли
   const commons = ['12345', '123456', 'password', 'qwerty', 'admin', 'user'];
   if (commons.some(seq => low.includes(seq))) {
     errors.push('Пароль не должен содержать простые последовательности (например 12345, qwerty, password).');
@@ -456,7 +450,7 @@ function validatePassword(password, { username = '', email = '' } = {}) {
 
   return errors;
 }
-// Валидация email (возвращает массив ошибок, пустой если ОК)
+// Валидация email 
 function validateEmail(rawEmail) {
   const errors = [];
   if (!rawEmail || typeof rawEmail !== 'string') {
@@ -466,18 +460,18 @@ function validateEmail(rawEmail) {
 
   const email = rawEmail.trim().toLowerCase();
 
-  // Общие ограничения длины (RFC допускает до 254, но для простоты — ограничим)
+  // Общие ограничения длины 
   if (email.length < 5 || email.length > 254) {
     errors.push('Email должен быть длиной от 5 до 254 символов.');
   }
 
-  // Простая и надёжная проверка формата (подойдёт для большинства случаев)
+  // простая проверка формата email
   const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRe.test(email)) {
     errors.push('Некорректный формат email.');
   }
 
-  // Дополнительные проверки локальной части и домена
+  // Доп проверки!
   const parts = email.split('@');
   if (parts.length !== 2 || parts[0].length === 0) {
     errors.push('Локальная часть (до @) некорректна.');
@@ -490,15 +484,12 @@ function validateEmail(rawEmail) {
 }
 
 // Отправка письма с кодом сброса пароля.
-// Использует SMTP из .env (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM).
-// Если SMTP не настроен — логируем код в консоль (удобно для разработки локально).
 async function sendResetEmail(toEmail, code) {
   const from = process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@example.com';
   const subject = 'Код для сброса пароля';
   const text = `Ваш код для сброса пароля: ${code}\n\nОн действителен 15 минут. Если вы не запрашивали сброс — проигнорируйте это письмо.`;
   const html = `<p>Ваш код для сброса пароля: <b>${code}</b></p><p>Он действителен 15 минут.</p>`;
 
-  // Если SMTP переменные не заданы — логируем код в консоль (dev mode).
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
     console.warn(`SMTP not configured — reset code for ${toEmail}: ${code}`);
     return;
@@ -507,7 +498,7 @@ async function sendResetEmail(toEmail, code) {
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
-    secure: Number(process.env.SMTP_PORT || 587) === 465, // true для 465
+    secure: Number(process.env.SMTP_PORT || 587) === 465, 
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS
@@ -549,7 +540,7 @@ app.post("/register", async (req, res) => {
       });
     }
 
-    // Проверка на существующего пользователя (после нормализации и валидации)
+    // Проверка на существующего пользователя (ПОСЛЕ нормализации и валидации)
     const existing = await User.findOne({ email: emailNorm });
     if (existing) {
       return res.status(400).json({
@@ -561,14 +552,14 @@ app.post("/register", async (req, res) => {
     // Валидация пароля по требованиям
     const pwErrors = validatePassword(password, { username, email: emailNorm });
     if (pwErrors.length > 0) {
-      // Возвращаем список причин, почему пароль не проходит
+      // Возвращаем список причин
       return res.status(400).json({
         message: "Пароль не соответствует требованиям",
         errors: pwErrors
       });
     }
 
-    // Всё ок — хешируем и создаём пользователя
+    // Всё ок—хешируем и создаём пользователя
     const hash = await bcrypt.hash(password, 10);
     const newUser = new User({
       username: username || '',
@@ -587,16 +578,13 @@ app.post("/register", async (req, res) => {
 
   } catch (err) {
     console.error("Register error:", err);
-    // Обработка ошибки дубликата на уровне БД (без гонки)
+    // обработка дубликата email по БД
     if (err && err.code === 11000 && err.keyPattern && err.keyPattern.email) {
       return res.status(400).json({ message: "Пользователь с таким email уже существует", errors: ['Пользователь с таким email уже существует'] });
     }
     res.status(500).json({ message: "Ошибка сервера" });
   }
 });
-
-// --- Конец патча ---
-
 
 app.post("/login", async (req, res) => {
   try {
@@ -616,7 +604,6 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// POST /forgot-password
 // Тело: { email }
 app.post("/forgot-password", async (req, res) => {
   try {
@@ -633,13 +620,13 @@ app.post("/forgot-password", async (req, res) => {
       // Генерация 6-значного кода крипто-безопасно
       const code = String(crypto.randomInt(100000, 1000000)); // 100000..999999
       const codeHash = crypto.createHash('sha256').update(code).digest('hex');
-      const expires = new Date(Date.now() + 1000 * 60 * 15); // 15 минут
+      const expires = new Date(Date.now() + 1000 * 60 * 15); // срок истека 15 минут
 
       user.passwordResetCode = codeHash;
       user.passwordResetExpires = expires;
       await user.save();
 
-      // Попытаться отправить письмо (если почта не настроена — лог в консоль)
+      // отправление письма (если почта не настроена — лог в консоль)
       try {
         await sendResetEmail(emailNorm, code);
       } catch (mailErr) {
@@ -647,7 +634,6 @@ app.post("/forgot-password", async (req, res) => {
       }
     }
 
-    // Всегда одинаковый ответ — не выдаём, существует ли email в системе
     res.json({ message: "Если пользователь с таким email существует, на него отправлен код для сброса пароля." });
   } catch (err) {
     console.error("forgot-password error:", err);
@@ -655,7 +641,6 @@ app.post("/forgot-password", async (req, res) => {
   }
 });
 
-// POST /reset-password
 // Тело: { email, code, newPassword }
 app.post("/reset-password", async (req, res) => {
   try {
@@ -670,24 +655,24 @@ app.post("/reset-password", async (req, res) => {
       return res.status(400).json({ message: "Неверный код или email" });
     }
 
-    // Проверяем срок действия
+    // проверка срока кода
     if (user.passwordResetExpires < new Date()) {
       return res.status(400).json({ message: "Код истёк" });
     }
 
-    // Сравниваем хешы
+    // сравнивание хеша
     const codeHash = crypto.createHash('sha256').update(String(code)).digest('hex');
     if (codeHash !== user.passwordResetCode) {
       return res.status(400).json({ message: "Неверный код или email" });
     }
 
-    // Проверяем новый пароль
+    // Проверка нового пароля
     const pwErrors = validatePassword(newPassword, { username: user.username, email: emailNorm });
     if (pwErrors.length > 0) {
       return res.status(400).json({ message: "Пароль не соответствует требованиям", errors: pwErrors });
     }
 
-    // Сохраняем новый пароль (хешируем) и очищаем поля сброса
+    // Сохраняем новый пароль (+хеш обязательно) и очищаем поля сброса
     const hash = await bcrypt.hash(newPassword, 10);
     user.password = hash;
     user.passwordResetCode = null;
@@ -695,7 +680,7 @@ app.post("/reset-password", async (req, res) => {
     user.lastActiveAt = new Date();
     await user.save();
 
-    // Опционально — сразу выдаём JWT, чтобы пользователь оказался залогинен
+    // сразу выдаём JWT, чтобы пользователь моментально залогинился
     const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
 
     res.json({ message: "Пароль успешно изменён", token: jwtToken });
@@ -747,7 +732,7 @@ app.post("/profile/achievements", authMiddleware, async (req, res) => {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: "Пользователь не найден" });
 
-    // избегаем дубликатов по code
+    // защита от дубликатов по code
     if (!user.achievements.some(a => a.code === code)) {
       user.achievements.push(ach);
       await user.save();
@@ -764,10 +749,10 @@ app.post("/profile/achievements", authMiddleware, async (req, res) => {
 
 
 /**
- * Trainings endpoints
+ Эндпоинты Trainings
  */
 
-/** List trainings */
+/** Все Trainings */
 app.get("/trainings", async (req, res) => {
   try {
     const { type, tag, isPublished, q, limit = 20, skip = 0 } = req.query;
@@ -789,11 +774,11 @@ app.get("/trainings", async (req, res) => {
   }
 });
 
-/** Create training (auth) — с интеграцией AI (если нужно) */
+/** Создание training (auth) — с интеграцией AI */
 app.post("/trainings", authMiddleware, async (req, res) => {
   try {
     const payload = req.body || {};
-    // If user provided title — keep, otherwise we'll ask HF to generate if aiGenerate true
+
     const defaultScenesCount = Number(process.env.DEFAULT_SCENES) || 5;
     const scenesCount = Number(payload.scenesCount) || defaultScenesCount;
     const choicesPerScene = Number(payload.choicesPerScene) || 3;
@@ -802,9 +787,7 @@ app.post("/trainings", authMiddleware, async (req, res) => {
     let aiMeta = { model: null, promptSeed: null, version: null };
     let aiGeneratedFlag = false;
 
-    // If aiGenerate requested, call HF to produce (possibly generating title/summary/location too)
     if (payload.aiGenerate) {
-      // call HF to produce full training structure; we pass title/type/location if present
       const hfResult = await generateTrainingHf({
         title: payload.title || '',
         type: payload.type || '',
@@ -813,24 +796,22 @@ app.post("/trainings", authMiddleware, async (req, res) => {
         choicesPerScene
       });
 
-      // Use HF title/summary/location/difficulty if user didn't provide them
       const finalTitle = payload.title || hfResult.title;
       const finalSummary = payload.summary || hfResult.summary;
       const finalLocation = payload.location && Object.keys(payload.location).length ? payload.location : hfResult.location;
       const finalDifficulty = payload.difficulty || hfResult.difficulty || 'medium';
 
-      // take scenes from HF unless user explicitly provided scenes
       scenes = Array.isArray(payload.scenes) && payload.scenes.length ? payload.scenes : (hfResult.scenes || []);
 
       aiGeneratedFlag = true;
       aiMeta = { model: process.env.HF_MODEL || null, promptSeed: payload.title || payload.type || null, version: new Date().toISOString() };
 
-      // build training object
+      // обьект training 
       const totalChoices = scenes.reduce((acc, s) => acc + (Array.isArray(s.choices) ? s.choices.length : 0), 0);
       const training = new Training({
         title: finalTitle,
         summary: finalSummary,
-        type: payload.type || payload.type, // keep user-provided type if any
+        type: payload.type || payload.type,
         location: finalLocation,
         difficulty: finalDifficulty,
         scenes,
@@ -845,9 +826,6 @@ app.post("/trainings", authMiddleware, async (req, res) => {
       return res.status(201).json(training);
     }
 
-    // If aiGenerate not requested:
-    // - if user provided scenes -> use them
-    // - if not provided -> create skeleton local fallback
     if (!Array.isArray(scenes) || scenes.length === 0) {
       scenes = simpleGenerateScenesSkeleton(payload.title || (payload.type ? `Тренировка: ${payload.type}` : 'Сценарий'), scenesCount, choicesPerScene);
     }
@@ -871,7 +849,7 @@ app.post("/trainings", authMiddleware, async (req, res) => {
 });
 
 
-/** Update training */
+/** Обновление training */
 app.put("/trainings/:id", authMiddleware, async (req, res) => {
   try {
     const training = await Training.findById(req.params.id);
@@ -891,7 +869,7 @@ app.put("/trainings/:id", authMiddleware, async (req, res) => {
   }
 });
 
-/** Delete training */
+/** Удаление training */
 app.delete("/trainings/:id", authMiddleware, async (req, res) => {
   try {
     const training = await Training.findById(req.params.id);
@@ -905,7 +883,7 @@ app.delete("/trainings/:id", authMiddleware, async (req, res) => {
   }
 });
 
-/** Attempt endpoint — обновлённый: записывает stats в тренировку и в профиль пользователя */
+/** Attempt(попытка прохождения тренировки(training)) endpoint. добавлено: записывает stats в тренировку и в профиль пользователя */
 app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
   try {
     const { choices, timeSec } = req.body;
@@ -914,7 +892,7 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
     const training = await Training.findById(req.params.id);
     if (!training) return res.status(404).json({ message: "Тренировка не найдена" });
 
-    // Построим карту сцен/вариантов
+    // карта сцен/вариантов
     const sceneMap = new Map();
     for (const s of training.scenes) {
       const choiceMap = new Map();
@@ -955,7 +933,6 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
     const success = (correctAnswers === totalScenes) || (correctAnswers === totalScenesConsidered);
     const totalChoices = totalScenes;
 
-    // Обновляем статистику тренировки
     const prevAttempts = training.stats.attempts || 0;
     const prevAvg = training.stats.avgTimeSec || 0;
     const newAttempts = prevAttempts + 1;
@@ -967,25 +944,23 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
 
     await training.save();
 
-    // --------- Обновляем статистику пользователя ----------
     const user = await User.findById(req.userId);
     if (user) {
       const uStats = user.stats || { totalAttempts: 0, successes: 0, avgScore: 0, totalTimeSec: 0 };
       const prevUserAttempts = uStats.totalAttempts || 0;
       const prevUserAvgScore = typeof uStats.avgScore === "number" ? uStats.avgScore : 0;
       const newUserAttempts = prevUserAttempts + 1;
-      // Средний балл пользователя пересчитываем по totalScore (можно выбрать другую метрику)
+      // Средний балл пользователя пересчитываем по totalScore
       const newAvgScore = prevUserAttempts === 0
         ? totalScore
         : ( (prevUserAvgScore * prevUserAttempts) + totalScore ) / newUserAttempts;
-      const roundedAvgScore = Math.round(newAvgScore * 100) / 100; // 2 знака
+      const roundedAvgScore = Math.round(newAvgScore * 100) / 100; 
 
       user.stats.totalAttempts = newUserAttempts;
       user.stats.avgScore = roundedAvgScore;
       user.stats.totalTimeSec = (uStats.totalTimeSec || 0) + (timeSec || 0);
       if (success) user.stats.successes = (uStats.successes || 0) + 1;
 
-      // Обновляем lastActiveAt
       user.lastActiveAt = new Date();
 
       // Простое достижение: первая успешная попытка
@@ -997,7 +972,7 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
       await user.save();
     }
 
-    // Ответ клиенту — с результатом и обновлённой статистикой тренировки (и опционально статистикой пользователя)
+    // Ответ клиенту
     const response = {
       message: "Результат записан",
       result: {
@@ -1011,7 +986,6 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
       updatedStats: training.stats
     };
 
-    // Добавим краткую статистику пользователя в ответ, если пользователь найден
     if (user) {
       const userSafe = {
         id: user._id,
@@ -1030,18 +1004,17 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
 });
 
 
-/** List trainings of the current authenticated user */
+/** список trainings текущего юзера */
 app.get("/trainings/mine", authMiddleware, async (req, res) => {
   try {
     const { type, tag, isPublished, limit = 20, skip = 0 } = req.query;
 
-    // Базовый фильтр — только записи этого пользователя
+    // только записи этого пользователя
     const filter = { createdBy: req.userId };
     // const t = await Training.findById(req.params.id).populate("createdBy", "username email");
     if (type) filter.type = type;
     if (typeof isPublished !== "undefined") filter.isPublished = isPublished === "true";
     if (tag) filter.tags = tag;
-    // Можно добавить другие фильтры по необходимости
 
     const trainings = await Training.find(filter).populate("createdBy", "username email")
       .limit(Math.min(100, parseInt(limit)))
