@@ -24,8 +24,8 @@ mongoose.connect(process.env.MONGO_URI)
 const userSchema = new mongoose.Schema({
   username: { type: String, default: "" },
   email: { type: String, unique: true, index: true, required: true },
-  password: { type: String, required: true }, // хранится хэш
-  avatarUrl: { type: String, default: "" }, // ссылка на аватар
+  password: { type: String, required: true }, //хэш
+  avatarUrl: { type: String, default: "" }, 
   stats: {
     totalAttempts: { type: Number, default: 0 },
     successes: { type: Number, default: 0 },
