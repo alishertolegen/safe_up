@@ -14,6 +14,63 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+const cloudinary = require("cloudinary").v2;
+const multer = require("multer");
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+app.post("/profile/avatar", authMiddleware, upload.single("avatar"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Файл не загружен" });
+    }
+
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: "Пользователь не найден" });
+
+    // Если был старый аватар — удаляем
+    if (user.avatarUrl) {
+      const publicId = user.avatarUrl.split("/").pop().split(".")[0];
+      await cloudinary.uploader.destroy(`avatars/${publicId}`);
+    }
+
+    // Загружаем новый
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: "avatars",
+          transformation: [
+            { width: 300, height: 300, crop: "fill", gravity: "face" },
+            { quality: "auto", fetch_format: "auto" }
+          ]
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+
+      stream.end(req.file.buffer);
+    });
+
+    user.avatarUrl = result.secure_url;
+    await user.save();
+
+    res.json({ avatarUrl: result.secure_url });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Ошибка загрузки аватара" });
+  }
+});
+
+
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
   .catch(err => console.error("MongoDB connection error:", err));
@@ -117,6 +174,7 @@ function authMiddleware(req, res, next) {
 /**
  * Hugging Face Router helper + parsers + fallbacks
  */
+
 async function callRouter(body) {
   const HF_TOKEN = process.env.HF_TOKEN;
   const apiUrl = 'https://router.huggingface.co/v1/chat/completions';
@@ -488,7 +546,38 @@ async function sendResetEmail(toEmail, code) {
   const from = process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@example.com';
   const subject = 'Код для сброса пароля';
   const text = `Ваш код для сброса пароля: ${code}\n\nОн действителен 15 минут. Если вы не запрашивали сброс — проигнорируйте это письмо.`;
-  const html = `<p>Ваш код для сброса пароля: <b>${code}</b></p><p>Он действителен 15 минут.</p>`;
+  const html = `<div style="font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px;">
+  <div style="max-width: 500px; margin: auto; background: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+    <h2 style="color: #333; margin-bottom: 20px;">Сброс пароля</h2>
+    <p style="font-size: 15px; color: #444;">
+      Здравствуйте!
+    </p>
+    <p style="font-size: 15px; color: #444;">
+      Для завершения процедуры сброса пароля используйте следующий код:
+    </p>
+
+    <div style="text-align: center; margin: 25px 0;">
+      <div style="display: inline-block; font-size: 26px; font-weight: bold; color: #2a7ae2; padding: 12px 25px; border: 2px solid #2a7ae2; border-radius: 6px;">
+        ${code}
+      </div>
+    </div>
+
+    <p style="font-size: 15px; color: #444;">
+      Код действителен в течение <b>15 минут</b>.
+    </p>
+
+    <p style="font-size: 14px; color: #777; margin-top: 25px;">
+      Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо.
+    </p>
+
+    <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
+
+    <p style="font-size: 12px; color: #999; text-align: center;">
+      Это письмо отправлено автоматически. Пожалуйста, не отвечайте на него.
+    </p>
+  </div>
+</div>
+`;
 
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
     console.warn(`SMTP not configured — reset code for ${toEmail}: ${code}`);

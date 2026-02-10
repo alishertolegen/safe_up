@@ -427,6 +427,33 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                       ),
                     ),
 
+                    const SizedBox(height: 16),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.red.shade600, width: 1.5),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: () {
+                          context.push('/forgot-password');
+                        },
+                        child: Text(
+                          'Поменять пароль',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: const Color.fromARGB(255, 207, 22, 22),
+                          ),
+                        ),
+                      ),
+                    ),
+
+
                     const SizedBox(height: 24),
 
                     // Info box
