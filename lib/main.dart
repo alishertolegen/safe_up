@@ -10,6 +10,8 @@ import 'my_trainings_screen.dart';
 import 'ProfileEditScreen.dart';
 import 'reset_password_screen.dart';
 import 'forgot_password_screen.dart';
+import 'rating.dart';
+
 
 void main() {
   runApp(const StartApp());
@@ -84,6 +86,9 @@ class StartApp extends StatelessWidget {
                       case 3:
                         context.go('/profile');
                         break;
+                      case 4:
+                        context.go('/rating');
+                        break;
                     }
                   },
                   destinations: [
@@ -139,6 +144,20 @@ class StartApp extends StatelessWidget {
                       ),
                       label: 'Профиль',
                     ),
+                    NavigationDestination(
+                      icon: Icon(
+                        Icons.star_outline,
+                        color: selectedIndex == 4
+                            ? Colors.blue.shade600
+                            : Colors.grey.shade600,
+                      ),
+                      selectedIcon: Icon(
+                        Icons.star,
+                        color: Colors.blue.shade600,
+                      ),
+                      label: 'Рейтинг',
+                    ),
+
                   ],
                 ),
               ),
@@ -165,6 +184,12 @@ class StartApp extends StatelessWidget {
               path: '/profile/edit',
               builder: (context, state) => const ProfileEditScreen(),
             ),
+            GoRoute(
+  path: '/rating',
+  builder: (context, state) => const RatingScreen(),
+),
+
+
           ],
         ),
       ],
@@ -247,5 +272,6 @@ int _calculateSelectedIndex(GoRouterState state) {
   if (location.startsWith('/profile')) return 3;
   if (location.startsWith('/mytrainings')) return 2;
   if (location.startsWith('/create')) return 1;
+  if (location.startsWith('/rating')) return 4; // новая страница
   return 0; 
 }

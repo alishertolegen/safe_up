@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 
 class ProfileEditScreen extends StatefulWidget {
   const ProfileEditScreen({super.key});
@@ -12,6 +15,10 @@ class ProfileEditScreen extends StatefulWidget {
 }
 
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
+  String? avatarUrl;
+bool _isUploading = false;
+final ImagePicker _picker = ImagePicker();
+
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameCtrl = TextEditingController();
   bool _isSaving = false;
@@ -67,6 +74,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
+        _nameCtrl.text = data["username"] ?? "";
+avatarUrl = data["avatarUrl"] ?? data["avatar_url"] ?? "";
+
         if (mounted) {
           setState(() {
             _nameCtrl.text = data["username"] ?? "";
@@ -254,30 +264,51 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                     const SizedBox(height: 8),
 
                     // Avatar with modern design
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [Colors.blue.shade600, Colors.blue.shade400],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.blue.withOpacity(0.3),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.person,
-                        size: 60,
-                        color: Colors.white,
-                      ),
-                    ),
+                    GestureDetector(
+  onTap: _isUploading ? null : _pickAndUpload,
+  child: Stack(
+    alignment: Alignment.bottomRight,
+    children: [
+      Container(
+        width: 120,
+        height: 120,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: LinearGradient(
+            colors: [Colors.blue.shade600, Colors.blue.shade400],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.blue.withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+          image: avatarUrl != null && avatarUrl!.isNotEmpty
+              ? DecorationImage(image: NetworkImage(avatarUrl!), fit: BoxFit.cover)
+              : null,
+        ),
+        child: (avatarUrl == null || avatarUrl!.isEmpty)
+            ? const Icon(Icons.person, size: 60, color: Colors.white)
+            : null,
+      ),
+      Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+        ),
+        padding: const EdgeInsets.all(6),
+        margin: const EdgeInsets.only(right: 2, bottom: 2),
+        child: _isUploading
+            ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+            : Icon(Icons.camera_alt_outlined, size: 20, color: Colors.blue.shade700),
+      )
+    ],
+  ),
+),
 
                     const SizedBox(height: 32),
 
@@ -484,6 +515,55 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                 ),
               ),
             ),
+    
     );
+    
   }
+Future<void> _pickAndUpload() async {
+  try {
+    final XFile? picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+
+    setState(() => _isUploading = true);
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token");
+    if (token == null) throw "Требуется авторизация";
+
+    final uri = Uri.parse("http://10.0.2.2:5000/profile/avatar");
+    final req = http.MultipartRequest('POST', uri);
+    req.headers['Authorization'] = 'Bearer $token';
+    final bytes = await picked.readAsBytes();
+    req.files.add(http.MultipartFile.fromBytes('avatar', bytes, filename: 'avatar.jpg'));
+
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+
+    if (res.statusCode == 200) {
+      final body = json.decode(res.body);
+      final newUrl = body['avatarUrl'] ?? body['avatar_url'] ?? body['url'] ?? '';
+      setState(() {
+        avatarUrl = newUrl;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Аватар обновлён')),
+      );
+      // можно обновить родителя — pop(true) когда сохраняешь весь профиль.
+    } else {
+      final msg = res.body.isNotEmpty ? (json.decode(res.body)['message'] ?? res.body) : 'Ошибка загрузки';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось загрузить: $msg')));
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+  } finally {
+    if (mounted) setState(() => _isUploading = false);
+  }
+}
+
 }

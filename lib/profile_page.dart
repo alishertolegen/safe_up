@@ -12,6 +12,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  String? avatarUrl;
   String name = "";
   String email = "";
   bool isLoading = true;
@@ -67,6 +68,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
+        avatarUrl = data["avatarUrl"] ?? data["avatar_url"] ?? "";
         final stats = data["stats"] ?? {};
         final ach = data["achievements"] ?? [];
 
@@ -173,14 +175,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.white, width: 3),
                               ),
-                              child: const CircleAvatar(
+                              child: CircleAvatar(
                                 radius: 50,
                                 backgroundColor: Colors.white,
-                                child: Icon(
-                                  Icons.person,
-                                  size: 50,
-                                  color: Colors.blue,
-                                ),
+                                backgroundImage: (avatarUrl != null && avatarUrl!.isNotEmpty)
+                                    ? NetworkImage(avatarUrl!)
+                                    : null,
+                                child: (avatarUrl == null || avatarUrl!.isEmpty)
+                                    ? Icon(Icons.person, size: 50, color: Colors.blue)
+                                    : null,
                               ),
                             ),
                             const SizedBox(height: 16),
