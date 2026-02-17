@@ -70,34 +70,33 @@ class _RatingScreenState extends State<RatingScreen> {
     }
   }
 
-  void _normalizeAndSortUsers() {
-    // Ensure stats exist and numeric types are correct, then sort:
-    for (var u in users) {
-      final stats = u['stats'] ?? {};
-      u['_stats_parsed'] = {
-        'totalAttempts': _toIntSafe(stats['totalAttempts']),
-        'successes': _toIntSafe(stats['successes']),
-        'avgScore': _toDoubleSafe(stats['avgScore']),
-        'totalTimeSec': _toIntSafe(stats['totalTimeSec']),
-      };
-    }
-
-    users.sort((a, b) {
-      final sa = a['_stats_parsed'];
-      final sb = b['_stats_parsed'];
-
-      // primary: avgScore desc
-      final cmpAvg = sb['avgScore'].compareTo(sa['avgScore']);
-      if (cmpAvg != 0) return cmpAvg;
-
-      // secondary: successes desc
-      final cmpSuc = sb['successes'].compareTo(sa['successes']);
-      if (cmpSuc != 0) return cmpSuc;
-
-      // tertiary: totalAttempts desc
-      return sb['totalAttempts'].compareTo(sa['totalAttempts']);
-    });
+void _normalizeAndSortUsers() {
+  // Ensure stats exist and numeric types are correct
+  for (var u in users) {
+    final stats = u['stats'] ?? {};
+    u['_stats_parsed'] = {
+      'totalAttempts': _toIntSafe(stats['totalAttempts'] ?? stats['total_attempts']),
+      'successes': _toIntSafe(stats['successes'] ?? stats['successes_count']),
+      'avgScore': _toDoubleSafe(stats['avgScore'] ?? stats['avg_score']),
+      'totalTimeSec': _toIntSafe(stats['totalTimeSec'] ?? stats['total_time_sec']),
+    };
   }
+
+  // Sort: 1) successes desc, 2) avgScore desc, 3) totalAttempts desc
+  users.sort((a, b) {
+    final sa = a['_stats_parsed'];
+    final sb = b['_stats_parsed'];
+
+    final cmpSuc = sb['successes'].compareTo(sa['successes']);
+    if (cmpSuc != 0) return cmpSuc;
+
+    final cmpAvg = sb['avgScore'].compareTo(sa['avgScore']);
+    if (cmpAvg != 0) return cmpAvg;
+
+    return sb['totalAttempts'].compareTo(sa['totalAttempts']);
+  });
+}
+
 
   int _toIntSafe(dynamic v) {
     if (v == null) return 0;

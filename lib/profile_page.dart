@@ -45,47 +45,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> fetchProfile() async {
-    setState(() => isLoading = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString("token");
+ Future<void> fetchProfile() async {
+  if (mounted) setState(() => isLoading = true);
 
-      if (token == null) {
-        setState(() {
-          isLoading = false;
-        });
-        return;
-      }
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    // после await надо проверять, что виджет ещё смонтирован
+    if (!mounted) return;
 
-      final res = await http.get(
-        Uri.parse("http://10.0.2.2:5000/profile"),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
-        },
-      );
+    final token = prefs.getString("token");
 
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        avatarUrl = data["avatarUrl"] ?? data["avatar_url"] ?? "";
-        final stats = data["stats"] ?? {};
-        final ach = data["achievements"] ?? [];
+    if (token == null) {
+      if (mounted) setState(() => isLoading = false);
+      return;
+    }
 
+    final res = await http.get(
+      Uri.parse("http://10.0.2.2:5000/profile"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+    );
+
+    if (!mounted) return;
+
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      avatarUrl = data["avatarUrl"] ?? data["avatar_url"] ?? "";
+      final stats = data["stats"] ?? {};
+      final ach = data["achievements"] ?? [];
+
+      if (mounted) {
         setState(() {
           name = data["username"] ?? "";
           email = data["email"] ?? "";
 
-          totalAttempts = (stats["totalAttempts"] ?? 0) is int
-              ? stats["totalAttempts"]
-              : (stats["totalAttempts"] ?? 0).toInt();
+          totalAttempts = (stats["totalAttempts"] ?? stats["total_attempts"] ?? 0) is int
+              ? (stats["totalAttempts"] ?? stats["total_attempts"] ?? 0)
+              : (stats["totalAttempts"] ?? stats["total_attempts"] ?? 0).toInt();
           successes = (stats["successes"] ?? 0) is int
-              ? stats["successes"]
+              ? (stats["successes"] ?? 0)
               : (stats["successes"] ?? 0).toInt();
-          avgScore = (stats["avgScore"] ?? 0).toDouble();
-          totalTimeSec = (stats["totalTimeSec"] ?? 0) is int
-              ? stats["totalTimeSec"]
-              : (stats["totalTimeSec"] ?? 0).toInt();
+          avgScore = (stats["avgScore"] ?? stats["avg_score"] ?? 0).toDouble();
+          totalTimeSec = (stats["totalTimeSec"] ?? stats["total_time_sec"] ?? 0) is int
+              ? (stats["totalTimeSec"] ?? stats["total_time_sec"] ?? 0)
+              : (stats["totalTimeSec"] ?? stats["total_time_sec"] ?? 0).toInt();
 
           achievements = List.from(ach);
 
@@ -93,17 +98,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           lastActiveStr = formatIso(data["lastActiveAt"] ?? data["last_active_at"] ?? data["lastActive"]);
           isLoading = false;
         });
-      } else {
-        setState(() {
-          isLoading = false;
-        });
       }
-    } catch (e) {
-      setState(() {
-        isLoading = false;
-      });
+    } else {
+      if (mounted) setState(() => isLoading = false);
     }
+  } catch (e) {
+    // не вызываем setState если виджет уже демонтирован
+    if (mounted) setState(() => isLoading = false);
   }
+}
+
 
   String formatDuration(int seconds) {
     final h = seconds ~/ 3600;
