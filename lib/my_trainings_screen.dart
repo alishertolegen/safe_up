@@ -11,6 +11,7 @@ const String API_BASE = String.fromEnvironment(
 );
 
 class MyTrainingsScreen extends StatefulWidget {
+  
   const MyTrainingsScreen({super.key});
 
   @override
@@ -54,6 +55,7 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
   }
 
   Future<List<Training>> _fetchTrainings() async {
+    
     final token = await _readToken();
 
     if (token == null || token.isEmpty) {
@@ -83,6 +85,7 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
         .where((e) => e is Map<String, dynamic> || e is Map)
         .map<Training>((e) => Training.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
+    
     return list;
   }
 
@@ -110,15 +113,62 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
   String _getDifficultyLabel(String difficulty) {
     return _difficultyLabels[difficulty.toLowerCase()] ?? difficulty;
   }
+  int _getSuccesses(Training t) {
+  final dyn = t as dynamic;
+  try {
+    final s1 = dyn.successes;
+    if (s1 is int) return s1;
+    if (s1 is double) return s1.toInt();
+    if (s1 is String) return int.tryParse(s1) ?? 0;
+  } catch (_) {}
+
+  try {
+    final stats = dyn.stats;
+    if (stats != null) {
+      if (stats is Map) {
+        final s2 = stats['successes'] ?? stats['success'] ?? stats['success_count'];
+        if (s2 is int) return s2;
+        if (s2 is double) return s2.toInt();
+        if (s2 is String) return int.tryParse(s2) ?? 0;
+      } else {
+        final s3 = (stats as dynamic).successes;
+        if (s3 is int) return s3;
+        if (s3 is double) return s3.toInt();
+        if (s3 is String) return int.tryParse(s3) ?? 0;
+      }
+    }
+  } catch (_) {}
+
+  return 0;
+}
+
+double _displayPercent(Training t) {
+  // Если есть хотя бы 1 успех — зафиксировать 100% и не парсить дальше
+  final succ = _getSuccesses(t);
+  if (succ >= 1) return 100.0;
+
+  // Иначе — взять последний известный процент безопасно (поддерживаем разные имена)
+  final dyn = t as dynamic;
+  try {
+    final cand = dyn.lastScorePercent ?? dyn.last_score_percent ?? dyn.lastScore ?? dyn.scorePercent;
+    if (cand is num) return (cand).toDouble();
+    if (cand is String) return double.tryParse(cand) ?? 0.0;
+  } catch (_) {}
+
+  return 0.0;
+}
+
 
   Widget _buildTrainingCard(Training t) {
     final locName = t.location.name.isNotEmpty 
         ? t.location.name 
         : (t.location.floor.isNotEmpty ? t.location.floor : 'Без локации');
     final dateStr = '${t.createdAt.day.toString().padLeft(2, '0')}.${t.createdAt.month.toString().padLeft(2, '0')}.${t.createdAt.year}';
-    final scorePercent = t.lastScorePercent.toStringAsFixed(0);
-    final difficultyColor = _getDifficultyColor(t.difficulty);
-    final difficultyLabel = _getDifficultyLabel(t.difficulty);
+    final displayPercent = _displayPercent(t);
+final scorePercent = displayPercent.toStringAsFixed(0);
+final difficultyColor = _getDifficultyColor(t.difficulty);
+final difficultyLabel = _getDifficultyLabel(t.difficulty);
+
 
     return InkWell(
       onTap: () => _openDetail(context, t),
@@ -195,16 +245,16 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: _getScoreColor(t.lastScorePercent).withOpacity(0.15),
+                    color: _getScoreColor(displayPercent).withOpacity(0.15),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        _getScoreIcon(t.lastScorePercent),
+                        _getScoreIcon(displayPercent),
                         size: 16,
-                        color: _getScoreColor(t.lastScorePercent),
+                        color: _getScoreColor(displayPercent),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -212,7 +262,7 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: _getScoreColor(t.lastScorePercent),
+                          color: _getScoreColor(displayPercent),
                         ),
                       ),
                     ],
