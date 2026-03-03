@@ -12,7 +12,7 @@ import 'reset_password_screen.dart';
 import 'forgot_password_screen.dart';
 import 'rating.dart';
 import 'generation_loading_screen.dart';
-
+import 'AchievementsScreen.dart';
 void main() {
   runApp(const StartApp());
 }
@@ -195,7 +195,7 @@ class StartApp extends StatelessWidget {
   path: '/rating',
   builder: (context, state) => const RatingScreen(),
 ),
-
+GoRoute(path: '/achievements', builder: (ctx, state) => const AchievementsScreen()),
 
           ],
         ),

@@ -44,7 +44,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return iso;
     }
   }
+  String formatPretty(String? iso) {
+  if (iso == null || iso.isEmpty) return "";
 
+  try {
+    final dt = DateTime.parse(iso).toLocal();
+    final now = DateTime.now();
+
+    final today = DateTime(now.year, now.month, now.day);
+    final date = DateTime(dt.year, dt.month, dt.day);
+
+    final diff = date.difference(today).inDays;
+
+    String time = "${_two(dt.hour)}:${_two(dt.minute)}";
+
+    if (diff == 0) return "Сегодня, $time";
+    if (diff == -1) return "Вчера, $time";
+
+    const months = [
+      '', 'янв', 'фев', 'мар', 'апр', 'май', 'июн',
+      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
+    ];
+
+    return "${dt.day} ${months[dt.month]}";
+  } catch (e) {
+    return iso;
+  }
+}
  Future<void> fetchProfile() async {
   if (mounted) setState(() => isLoading = true);
 
@@ -315,109 +341,130 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                     // Achievements
                     Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.emoji_events, color: Colors.amber.shade700, size: 20),
-                              const SizedBox(width: 8),
-                              const Text(
-                                "Достижения",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          achievements.isEmpty
-                              ? Container(
-                                  padding: const EdgeInsets.all(20),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.info_outline, color: Colors.grey.shade600, size: 20),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          "Достижений пока нет. Продолжайте тренироваться!",
-                                          style: TextStyle(color: Colors.grey.shade700),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : Wrap(
-                                  spacing: 10,
-                                  runSpacing: 10,
-                                  children: achievements.map<Widget>((a) {
-                                    final code = a["code"] ?? "";
-                                    final title = a["title"] ?? code;
-                                    final earned = formatIso(a["earnedAt"] ?? a["earned_at"]);
-                                    return Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [Colors.amber.shade100, Colors.amber.shade50],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: Colors.amber.shade200),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.emoji_events, size: 20, color: Colors.amber.shade700),
-                                          const SizedBox(width: 8),
-                                          Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                title,
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 13,
-                                                  color: Colors.amber.shade900,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                earned,
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Colors.grey.shade700,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                        ],
-                      ),
+  width: double.infinity,
+  padding: const EdgeInsets.all(20),
+  decoration: BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(16),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withOpacity(0.05),
+        blurRadius: 10,
+        offset: const Offset(0, 2),
+      ),
+    ],
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // header
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.emoji_events, color: Colors.amber.shade700, size: 20),
+              const SizedBox(width: 8),
+              const Text(
+                "Достижения",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          TextButton(
+            onPressed: () => context.push('/achievements'),
+            child: const Text("Все →"),
+          ),
+        ],
+      ),
+
+      const SizedBox(height: 16),
+
+      achievements.isEmpty
+          ? Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.grey.shade600),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "Пока нет достижений",
+                      style: TextStyle(color: Colors.grey.shade700),
                     ),
+                  ),
+                ],
+              ),
+            )
+          : SizedBox(
+              height: 100,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: achievements.length > 5 ? 5 : achievements.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, i) {
+                  final a = achievements[i];
+                  final title = a["title"] ?? a["code"] ?? "";
+                  final rawDate = a["earnedAt"] ?? a["earned_at"];
+
+                  final date = formatPretty(rawDate);
+
+                  return Container(
+                    width: 140,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.amber.shade100,
+                          Colors.amber.shade50
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.amber.shade200),
+                    ),
+                    child: Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  children: [
+    Icon(Icons.emoji_events,
+        color: Colors.amber.shade700, size: 22),
+
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.amber.shade900,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          date,
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.grey.shade700,
+          ),
+        ),
+      ],
+    ),
+  ],
+),
+                  );
+                },
+              ),
+            ),
+    ],
+  ),
+),
 
                     const SizedBox(height: 16),
 

@@ -11,7 +11,6 @@ const String API_BASE = String.fromEnvironment(
 );
 
 class MyTrainingsScreen extends StatefulWidget {
-  
   const MyTrainingsScreen({super.key});
 
   @override
@@ -43,6 +42,12 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
     'hard': 'Сложный',
   };
 
+  // --- Search & filter state ---
+  String _searchQuery = '';
+  String _filterType = 'Все';
+  String _filterDifficulty = 'Все';
+
+
   @override
   void initState() {
     super.initState();
@@ -55,7 +60,6 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
   }
 
   Future<List<Training>> _fetchTrainings() async {
-    
     final token = await _readToken();
 
     if (token == null || token.isEmpty) {
@@ -85,7 +89,7 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
         .where((e) => e is Map<String, dynamic> || e is Map)
         .map<Training>((e) => Training.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();
-    
+
     return list;
   }
 
@@ -113,62 +117,61 @@ class _MyTrainingsScreenState extends State<MyTrainingsScreen> {
   String _getDifficultyLabel(String difficulty) {
     return _difficultyLabels[difficulty.toLowerCase()] ?? difficulty;
   }
+
   int _getSuccesses(Training t) {
-  final dyn = t as dynamic;
-  try {
-    final s1 = dyn.successes;
-    if (s1 is int) return s1;
-    if (s1 is double) return s1.toInt();
-    if (s1 is String) return int.tryParse(s1) ?? 0;
-  } catch (_) {}
+    final dyn = t as dynamic;
+    try {
+      final s1 = dyn.successes;
+      if (s1 is int) return s1;
+      if (s1 is double) return s1.toInt();
+      if (s1 is String) return int.tryParse(s1) ?? 0;
+    } catch (_) {}
 
-  try {
-    final stats = dyn.stats;
-    if (stats != null) {
-      if (stats is Map) {
-        final s2 = stats['successes'] ?? stats['success'] ?? stats['success_count'];
-        if (s2 is int) return s2;
-        if (s2 is double) return s2.toInt();
-        if (s2 is String) return int.tryParse(s2) ?? 0;
-      } else {
-        final s3 = (stats as dynamic).successes;
-        if (s3 is int) return s3;
-        if (s3 is double) return s3.toInt();
-        if (s3 is String) return int.tryParse(s3) ?? 0;
+    try {
+      final stats = dyn.stats;
+      if (stats != null) {
+        if (stats is Map) {
+          final s2 = stats['successes'] ?? stats['success'] ?? stats['success_count'];
+          if (s2 is int) return s2;
+          if (s2 is double) return s2.toInt();
+          if (s2 is String) return int.tryParse(s2) ?? 0;
+        } else {
+          final s3 = (stats as dynamic).successes;
+          if (s3 is int) return s3;
+          if (s3 is double) return s3.toInt();
+          if (s3 is String) return int.tryParse(s3) ?? 0;
+        }
       }
-    }
-  } catch (_) {}
+    } catch (_) {}
 
-  return 0;
-}
+    return 0;
+  }
 
-double _displayPercent(Training t) {
-  // Если есть хотя бы 1 успех — зафиксировать 100% и не парсить дальше
-  final succ = _getSuccesses(t);
-  if (succ >= 1) return 100.0;
+  double _displayPercent(Training t) {
+    // Если есть хотя бы 1 успех — зафиксировать 100% и не парсить дальше
+    final succ = _getSuccesses(t);
+    if (succ >= 1) return 100.0;
 
-  // Иначе — взять последний известный процент безопасно (поддерживаем разные имена)
-  final dyn = t as dynamic;
-  try {
-    final cand = dyn.lastScorePercent ?? dyn.last_score_percent ?? dyn.lastScore ?? dyn.scorePercent;
-    if (cand is num) return (cand).toDouble();
-    if (cand is String) return double.tryParse(cand) ?? 0.0;
-  } catch (_) {}
+    // Иначе — взять последний известный процент безопасно (поддерживаем разные имена)
+    final dyn = t as dynamic;
+    try {
+      final cand = dyn.lastScorePercent ?? dyn.last_score_percent ?? dyn.lastScore ?? dyn.scorePercent;
+      if (cand is num) return (cand).toDouble();
+      if (cand is String) return double.tryParse(cand) ?? 0.0;
+    } catch (_) {}
 
-  return 0.0;
-}
-
+    return 0.0;
+  }
 
   Widget _buildTrainingCard(Training t) {
-    final locName = t.location.name.isNotEmpty 
-        ? t.location.name 
+    final locName = t.location.name.isNotEmpty
+        ? t.location.name
         : (t.location.floor.isNotEmpty ? t.location.floor : 'Без локации');
     final dateStr = '${t.createdAt.day.toString().padLeft(2, '0')}.${t.createdAt.month.toString().padLeft(2, '0')}.${t.createdAt.year}';
     final displayPercent = _displayPercent(t);
-final scorePercent = displayPercent.toStringAsFixed(0);
-final difficultyColor = _getDifficultyColor(t.difficulty);
-final difficultyLabel = _getDifficultyLabel(t.difficulty);
-
+    final scorePercent = displayPercent.toStringAsFixed(0);
+    final difficultyColor = _getDifficultyColor(t.difficulty);
+    final difficultyLabel = _getDifficultyLabel(t.difficulty);
 
     return InkWell(
       onTap: () => _openDetail(context, t),
@@ -208,7 +211,7 @@ final difficultyLabel = _getDifficultyLabel(t.difficulty);
                   ),
                 ),
                 const SizedBox(width: 12),
-                
+
                 // Title and metadata
                 Expanded(
                   child: Column(
@@ -240,7 +243,7 @@ final difficultyLabel = _getDifficultyLabel(t.difficulty);
                     ],
                   ),
                 ),
-                
+
                 // Score badge
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -270,9 +273,9 @@ final difficultyLabel = _getDifficultyLabel(t.difficulty);
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Location and difficulty chips
             Row(
               children: [
@@ -299,7 +302,7 @@ final difficultyLabel = _getDifficultyLabel(t.difficulty);
                   ),
                 ),
                 const SizedBox(width: 8),
-                
+
                 // Difficulty
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -336,8 +339,46 @@ final difficultyLabel = _getDifficultyLabel(t.difficulty);
     return Icons.warning;
   }
 
+  // Apply search + filters locally
+  List<Training> _applyFilters(List<Training> source) {
+    final q = _searchQuery.trim().toLowerCase();
+
+    return source.where((t) {
+      final title = t.title.toLowerCase();
+      final locName = (t.location.name ?? '').toLowerCase();
+      final floor = (t.location.floor ?? '').toLowerCase();
+      final type = (t.type ?? '').toLowerCase();
+      final difficulty = (t.difficulty ?? '').toLowerCase();
+      final percent = _displayPercent(t);
+
+      // Search match (title or location)
+      final matchesSearch = q.isEmpty ||
+          title.contains(q) ||
+          locName.contains(q) ||
+          floor.contains(q);
+
+      if (!matchesSearch) return false;
+
+      // Type filter
+      if (_filterType != 'Все') {
+        if (type != _filterType.toLowerCase()) return false;
+      }
+
+      // Difficulty filter
+      if (_filterDifficulty != 'Все') {
+        if (difficulty != _filterDifficulty.toLowerCase()) return false;
+      }
+
+
+      return true;
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final availableTypes = ['Все'] + _typeIcons.keys.map((k) => k).toList();
+    final availableDifficulties = ['Все', 'easy', 'medium', 'hard'];
+
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
@@ -354,7 +395,7 @@ final difficultyLabel = _getDifficultyLabel(t.difficulty);
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
-            
+
             if (snapshot.hasError) {
               return Center(
                 child: Container(
@@ -412,67 +453,221 @@ final difficultyLabel = _getDifficultyLabel(t.difficulty);
             }
 
             final list = snapshot.data ?? [];
-            
-            if (list.isEmpty) {
-              return Center(
-                child: Container(
-                  padding: const EdgeInsets.all(32),
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.fitness_center,
-                          size: 40,
-                          color: Colors.blue.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Тренировок пока нет',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade900,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Создайте свою первую тренировку',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
+
+            // UI: Search and filters area (sticky above list)
+            Widget filtersArea = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Search field
+                TextField(
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                  decoration: InputDecoration(
+                    hintText: 'Поиск по названию или локации',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () => setState(() => _searchQuery = ''),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
+                const SizedBox(height: 12),
+
+                // Filters row: type + difficulty + min score + clear
+Row(
+  children: [
+    // Type dropdown
+    Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            isExpanded: true,
+            value: _filterType,
+            items: availableTypes
+                .map((t) => DropdownMenuItem(
+                      value: t,
+                      child: Text(
+                        t == 'Все' ? 'Все типы' : t,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ))
+                .toList(),
+            onChanged: (v) => setState(() => _filterType = v ?? 'Все'),
+          ),
+        ),
+      ),
+    ),
+    const SizedBox(width: 8),
+
+    // Difficulty dropdown
+    Container(
+      width: 140,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          isExpanded: true,
+          value: _filterDifficulty,
+          items: availableDifficulties
+              .map((d) => DropdownMenuItem(
+                    value: d,
+                    child: Text(
+                      d == 'Все' ? 'Все уровни' : _getDifficultyLabel(d),
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ))
+              .toList(),
+          onChanged: (v) => setState(() => _filterDifficulty = v ?? 'Все'),
+        ),
+      ),
+    ),
+    const SizedBox(width: 8),
+
+    // 🔥 КНОПКА СБРОСА
+    IconButton(
+      onPressed: () {
+        setState(() {
+          _searchQuery = '';
+          _filterType = 'Все';
+          _filterDifficulty = 'Все';
+        });
+      },
+      icon: const Icon(Icons.clear),
+      tooltip: 'Сбросить фильтры',
+    ),
+  ],
+),
+                const SizedBox(height: 12),
+              ],
+            );
+
+            if (list.isEmpty) {
+              return Column(
+                children: [
+                  filtersArea,
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(32),
+                        margin: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.fitness_center,
+                                size: 40,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Тренировок пока нет',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade900,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Создайте свою первую тренировку',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               );
             }
 
+            final filtered = _applyFilters(list);
+
             return RefreshIndicator(
               onRefresh: _refresh,
-              child: ListView.builder(
+              child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: list.length,
-                itemBuilder: (context, i) => _buildTrainingCard(list[i]),
+                children: [
+                  filtersArea,
+                  if (filtered.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 24),
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(20),
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              const Icon(Icons.search_off, size: 48, color: Colors.grey),
+                              const SizedBox(height: 12),
+                              Text(
+                                'По заданным фильтрам ничего не найдено',
+                                style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Попробуйте сбросить фильтры или изменить поисковый запрос',
+                                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  ...filtered.map((t) => _buildTrainingCard(t)).toList(),
+                  const SizedBox(height: 12),
+                ],
               ),
             );
           },
