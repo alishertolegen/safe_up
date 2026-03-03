@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'login.dart';
 import 'register.dart';
 import 'home.dart';
@@ -13,17 +13,22 @@ import 'forgot_password_screen.dart';
 import 'rating.dart';
 import 'generation_loading_screen.dart';
 import 'AchievementsScreen.dart';
-void main() {
-  runApp(const StartApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('token');
+  final initial = (token != null && token.isNotEmpty) ? '/home' : '/login';
+  runApp(StartApp(initialRoute: initial));
 }
 
 class StartApp extends StatelessWidget {
-  const StartApp({super.key});
+  final String initialRoute;
+  const StartApp({super.key, required this.initialRoute});
 
   @override
   Widget build(BuildContext context) {
     final GoRouter router = GoRouter(
-      initialLocation: '/login',
+      initialLocation: initialRoute,
       routes: [
         GoRoute(
           path: '/login',
@@ -203,9 +208,9 @@ GoRoute(path: '/achievements', builder: (ctx, state) => const AchievementsScreen
     );
 
     return MaterialApp.router(
+      routerConfig: router,
       debugShowCheckedModeBanner: false,
       title: 'SafeUp',
-      routerConfig: router,
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: Colors.blue,

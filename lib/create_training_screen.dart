@@ -16,7 +16,6 @@ class CreateTrainingScreen extends StatefulWidget {
 }
 
 class _CreateTrainingScreenState extends State<CreateTrainingScreen> {
-  final _titleController = TextEditingController();
   final _otherLocationController = TextEditingController();
 
   String _selectedType = 'пожар';
@@ -49,19 +48,13 @@ class _CreateTrainingScreenState extends State<CreateTrainingScreen> {
 
   @override
   void dispose() {
-    _titleController.dispose();
     _otherLocationController.dispose();
     super.dispose();
   }
 Map<String, dynamic> _buildPayload() {
-  final String? titleInput = _titleController.text.trim().isEmpty
-      ? null
-      : _titleController.text.trim();
-
   final Map<String, dynamic> payload = {};
   payload['aiGenerate'] = true;
 
-  if (titleInput != null) payload['title'] = titleInput;
   if (_selectedType.isNotEmpty) payload['type'] = _selectedType;
   payload['difficulty'] = _selectedDifficulty;
 
@@ -181,29 +174,7 @@ Future<void> _createTraining() async {
             );
           }).toList(),
         ),
-        if (_selectedLocation == 'Другое') ...[
-          const SizedBox(height: 12),
-          TextField(
-            controller: _otherLocationController,
-            decoration: InputDecoration(
-              labelText: 'Введите локацию',
-              filled: true,
-              fillColor: Colors.grey.shade50,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.blue, width: 2),
-              ),
-            ),
-          )
-        ]
+        
       ],
     );
   }
@@ -271,59 +242,6 @@ Future<void> _createTraining() async {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Title card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.edit_outlined, color: Colors.blue, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Название (опционально)',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _titleController,
-                      decoration: InputDecoration(
-                        hintText: 'Например: Пожар в офисе QazTech',
-                        hintStyle: TextStyle(color: Colors.grey.shade400),
-                        filled: true,
-                        fillColor: Colors.grey.shade50,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
 
               // Type card
               Container(

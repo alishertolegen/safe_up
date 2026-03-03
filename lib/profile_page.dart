@@ -51,32 +51,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String formatPretty(String? iso) {
-    if (iso == null || iso.isEmpty) return "";
+  if (iso == null || iso.isEmpty) return "-";
 
-    try {
-      final dt = DateTime.parse(iso).toLocal();
-      final now = DateTime.now();
+  try {
+    final dt = DateTime.parse(iso).toLocal();
+    final now = DateTime.now();
 
-      final today = DateTime(now.year, now.month, now.day);
-      final date = DateTime(dt.year, dt.month, dt.day);
+    final today = DateTime(now.year, now.month, now.day);
+    final date = DateTime(dt.year, dt.month, dt.day);
 
-      final diff = date.difference(today).inDays;
+    final diff = date.difference(today).inDays;
 
-      String time = "${_two(dt.hour)}:${_two(dt.minute)}";
+    String time = "${_two(dt.hour)}:${_two(dt.minute)}";
 
-      if (diff == 0) return "Сегодня, $time";
-      if (diff == -1) return "Вчера, $time";
+    if (diff == 0) return "Сегодня, $time";
+    if (diff == -1) return "Вчера, $time";
 
-      const months = [
-        '', 'янв', 'фев', 'мар', 'апр', 'май', 'июн',
-        'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
-      ];
-
-      return "${dt.day} ${months[dt.month]}";
-    } catch (e) {
-      return iso;
-    }
+    const months = [
+      '',
+      'января',
+      'февраля',
+      'марта',
+      'апреля',
+      'мая',
+      'июня',
+      'июля',
+      'августа',
+      'сентября',
+      'октября',
+      'ноября',
+      'декабря'
+    ];
+    if (dt.year != now.year) {
+  return "${dt.day} ${months[dt.month]} ${dt.year}";
+}
+    return "${dt.day} ${months[dt.month]} $time";
+  } catch (e) {
+    return iso;
   }
+}
 
   int _parseInt(dynamic v) {
     if (v == null) return 0;
@@ -140,8 +153,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             achievements = List.from(ach);
 
-            createdAtStr = formatIso(data["createdAt"] ?? data["created_at"]);
-            lastActiveStr = formatIso(data["lastActiveAt"] ?? data["last_active_at"] ?? data["lastActive"]);
+            createdAtStr = formatPretty(data["createdAt"] ?? data["created_at"]);
+lastActiveStr = formatPretty(data["lastActiveAt"] ?? data["last_active_at"] ?? data["lastActive"]);
 
             // NEW: parse xp/level (backend must return them)
             xp = _parseInt(data["xp"] ?? 0);
