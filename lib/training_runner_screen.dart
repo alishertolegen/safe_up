@@ -92,6 +92,68 @@ void _showLoadingDialog() {
     ),
   );
 }
+void _showLastAnswerDialog({
+  required bool isCorrect,
+  required String consequenceText,
+  String? correctChoiceText,
+}) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        children: [
+          Icon(
+            isCorrect ? Icons.check_circle : Icons.cancel,
+            color: isCorrect ? Colors.green : Colors.red,
+            size: 28,
+          ),
+          const SizedBox(width: 10),
+          Text(isCorrect ? 'Верно!' : 'Неверно'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (consequenceText.isNotEmpty)
+            Text(consequenceText, style: const TextStyle(fontSize: 14)),
+          if (correctChoiceText != null) ...[
+            const SizedBox(height: 12),
+            const Divider(),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: Colors.red.shade700),
+                const SizedBox(width: 6),
+                const Text('Правильный ответ:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(correctChoiceText, style: TextStyle(fontSize: 14, color: Colors.grey.shade800)),
+          ],
+        ],
+      ),
+      actions: [
+        ElevatedButton(
+          onPressed: () {
+            Navigator.of(ctx).pop();
+            _showLoadingDialog();
+            _submitAttempt();
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: const Text('Хорошо!'),
+        ),
+      ],
+    ),
+  );
+}
   void _handleTapChoice(int sceneId, String choiceId) {
     if (_results.containsKey(sceneId)) return;
 
@@ -112,11 +174,13 @@ void _showLoadingDialog() {
       );
     });
 if (_allAnswered && !_submitting) {
-  Future.delayed(const Duration(milliseconds: 1500), () {
-    if (mounted && !_submitting) _submitAttempt();
-  });
+  final result = _results[sceneId]!;
+  _showLastAnswerDialog(
+    isCorrect: result.isCorrect,
+    consequenceText: result.consequenceText,
+    correctChoiceText: result.isCorrect ? null : result.correctChoiceText,
+  );
 }
-
   }
 
   void _goNext() {
@@ -143,7 +207,7 @@ if (_allAnswered && !_submitting) {
     if (_submitting) return;
     final token = await _readToken();
     if (token == null || token.isEmpty) {
-      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+      Navigator.of(context, rootNavigator: true).pop();
       _showMessage('Требуется авторизация. Войдите в аккаунт.');
       return;
     }
@@ -167,13 +231,13 @@ if (_allAnswered && !_submitting) {
           body: body);
 
       if (res.statusCode == 401) {
-        if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+        Navigator.of(context, rootNavigator: true).pop();
         _showMessage('Неавторизован. Пожалуйста, войдите снова.');
         setState(() => _submitting = false);
         return;
       }
       if (res.statusCode != 200) {
-        if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+        Navigator.of(context, rootNavigator: true).pop();
         _showMessage('Ошибка сервера: ${res.statusCode}');
         setState(() => _submitting = false);
         return;
@@ -186,10 +250,10 @@ if (_allAnswered && !_submitting) {
 
       final updatedStats = data['updatedStats'] as Map<String, dynamic>?;
       if (!mounted) return;
-if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+Navigator.of(context, rootNavigator: true).pop();
 _showResultDialog(result, updatedStats);
     } catch (err) {
-      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+      Navigator.of(context, rootNavigator: true).pop();
       _showMessage('Ошибка сети: $err');
       setState(() => _submitting = false);
     }
