@@ -127,15 +127,21 @@ void _normalizeAndSortUsers() {
 
   String _two(int n) => n.toString().padLeft(2, '0');
 
-  String formatIso(String? iso) {
-    if (iso == null || iso.isEmpty) return "-";
-    try {
-      final dt = DateTime.parse(iso).toLocal();
-      return "${dt.year}-${_two(dt.month)}-${_two(dt.day)} ${_two(dt.hour)}:${_two(dt.minute)}";
-    } catch (e) {
-      return iso;
-    }
+String formatIso(String? iso) {
+  if (iso == null || iso.isEmpty) return "-";
+  try {
+    final dt = DateTime.parse(iso).toLocal();
+
+    const months = [
+      '', 'янв', 'фев', 'мар', 'апр', 'май', 'июн',
+      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
+    ];
+
+    return "${dt.day} ${months[dt.month]} ${_two(dt.hour)}:${_two(dt.minute)}";
+  } catch (e) {
+    return iso;
   }
+}
 
   void _openUserDetails(BuildContext context, dynamic user, int rank) {
     final stats = user['_stats_parsed'] ?? {};
@@ -180,6 +186,21 @@ void _normalizeAndSortUsers() {
                               )
                             : null,
                       ),
+                      Positioned(
+      bottom: 0,
+      right: 0,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Colors.blue,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          'Lv.${user['level'] ?? 1}',
+          style: const TextStyle(color: Colors.white, fontSize: 10),
+        ),
+      ),
+    ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -189,6 +210,11 @@ void _normalizeAndSortUsers() {
                               '${user['username'] ?? 'Имя отсутствует'}',
                               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                             ),
+                            const SizedBox(height: 4),
+Text(
+  'Уровень ${user['level'] ?? 1} • XP ${user['xp'] ?? 0}',
+  style: TextStyle(color: Colors.grey.shade600),
+),
                             const SizedBox(height: 4),
                             Text(
                               user['email'] ?? '',
@@ -311,7 +337,10 @@ void _normalizeAndSortUsers() {
               : null,
         ),
         title: Text(username.toString()),
-        subtitle: Text('Попыток: ${stats['totalAttempts'] ?? 0} • Успехов: ${stats['successes'] ?? 0}'),
+        subtitle: Text(
+  'Lv.${user['level'] ?? 1} • XP: ${user['xp'] ?? 0}\n'
+  'Попыток: ${stats['totalAttempts'] ?? 0} • Успехов: ${stats['successes'] ?? 0}'
+),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

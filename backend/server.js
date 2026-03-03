@@ -83,6 +83,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, unique: true, index: true, required: true },
   password: { type: String, required: true }, //хэш
   avatarUrl: { type: String, default: "" }, 
+  // ---- статистика ----
   stats: {
     totalAttempts: { type: Number, default: 0 },
     successes: { type: Number, default: 0 },
@@ -94,14 +95,18 @@ const userSchema = new mongoose.Schema({
     riskyChoices: { type: Number, default: 0 },
     failedTrainings: [{ type: mongoose.Schema.Types.ObjectId, ref: "Training" }]
   },
-achievements: [
-  {
-    code: { type: String, required: true },
-    title: { type: String, default: "" },
-    earnedAt: { type: Date, default: Date.now },
-    manual: { type: Boolean, default: false } // отметка, добавлено вручную/автоматически
-  }
-],
+  // ---- XP / Level ----
+  xp: { type: Number, default: 0 },
+  level: { type: Number, default: 1 },
+
+  achievements: [
+    {
+      code: { type: String, required: true },
+      title: { type: String, default: "" },
+      earnedAt: { type: Date, default: Date.now },
+      manual: { type: Boolean, default: false } // отметка, добавлено вручную/автоматически
+    }
+  ],
   passwordResetCode: { type: String, default: null, select: false }, // хеш кода (sha256)
   passwordResetExpires: { type: Date, default: null, select: false },
 
@@ -196,10 +201,72 @@ async function giveAchievementToUser(user, code, fallbackTitle = null, manual = 
     manual: !!manual
   });
 
+  // если достижение даёт очки — прибавляем XP
+  try {
+    if (ach.points && Number(ach.points) !== 0) {
+      // addXpToUser сохранит user
+      await addXpToUser(user, Number(ach.points));
+      // addXpToUser уже делает user.save()
+      return true;
+    }
+  } catch (e) {
+    console.error('Error adding achievement points:', e);
+  }
+
+  // если очков нет — просто сохраняем
   await user.save();
   return true;
 }
 const Training = mongoose.model("Training", trainingSchema);
+// ---------------- XP / Level system ----------------
+const XP_PER_LEVEL = Number(process.env.XP_PER_LEVEL) || 100;
+/**
+ * Простая формула:
+ * level = floor( sqrt(xp / XP_PER_LEVEL) ) + 1
+ * => уровни: lvl2 @ 100, lvl3 @ 400, lvl4 @ 900 (для XP_PER_LEVEL=100)
+ */
+function levelFromXp(xp) {
+  const l = Math.floor(Math.sqrt((xp || 0) / XP_PER_LEVEL)) + 1;
+  return Math.max(1, l);
+}
+function xpForLevel(lvl) {
+  // минимальный xp для уровня lvl
+  return XP_PER_LEVEL * Math.pow(Math.max(0, lvl - 1), 2);
+}
+function xpToNextLevel(xp) {
+  const cur = levelFromXp(xp);
+  const nextXp = xpForLevel(cur + 1);
+  return Math.max(0, nextXp - (xp || 0));
+}
+
+/**
+ * Увеличивает user.xp на amount (может быть отрицательным).
+ * Сохраняет пользователя и возвращает info об изменениях.
+ */
+async function addXpToUser(user, amount) {
+  if (!user || typeof amount !== 'number' || amount === 0) {
+    return { ok: false, message: 'No-op' };
+  }
+  const prevXp = user.xp || 0;
+  const prevLevel = user.level || 1;
+
+  // применяем, но не даём отрицательный итог
+  user.xp = Math.max(0, prevXp + Math.round(amount));
+  const newLevel = levelFromXp(user.xp);
+  user.level = newLevel;
+
+  await user.save();
+
+  return {
+    ok: true,
+    prevXp,
+    newXp: user.xp,
+    prevLevel,
+    newLevel,
+    leveledUp: newLevel > prevLevel
+  };
+}
+// ---------------------------------------------------
 const SCORE_MAP = {
   correct: 10,
   warning: 0,
@@ -722,6 +789,8 @@ app.post("/register", async (req, res) => {
       avatarUrl: "",
       stats: { totalAttempts: 0, successes: 0, avgScore: 0, totalTimeSec: 0 },
       achievements: [],
+      xp: 0,
+      level: 1,
       lastActiveAt: new Date()
     });
 
@@ -955,10 +1024,15 @@ app.post("/profile/achievements", authMiddleware, async (req, res) => {
     const ach = await Achievement.findOne({ code });
     const achTitle = ach ? ach.title : (title || code);
 
-    user.achievements = user.achievements || [];
-    user.achievements.push({ code, title: achTitle, earnedAt: earnedAt ? new Date(earnedAt) : new Date(), manual: true });
+user.achievements = user.achievements || [];
+user.achievements.push({ code, title: achTitle, earnedAt: earnedAt ? new Date(earnedAt) : new Date(), manual: true });
 
-    await user.save();
+// начисляем очки за достижение, если есть
+if (ach && Number(ach.points)) {
+  await addXpToUser(user, Number(ach.points));
+} else {
+  await user.save();
+}
 
     const out = user.toObject();
     delete out.password;
@@ -1194,7 +1268,17 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
       // считаем рискованные выборы в этой попытке (consequenceType === 'fatal')
       const riskyInAttempt = details.reduce((acc, d) => acc + ((d.consequenceType === 'warning') ? 1 : 0), 0);
       const correctInAttempt = details.reduce((acc, d) => acc + ((d.consequenceType === 'correct') ? 1 : 0), 0);
-
+      // --- начисляем XP за эту попытку (totalScore может быть отрицательным) ---
+try {
+  const xpRes = await addXpToUser(user, totalScore);
+  // можно логировать xpRes, или если leveledUp — выдавать нотификацию
+  if (xpRes.leveledUp) {
+    // опционально: создать достижение/лог уровня
+    // await giveAchievementToUser(user, `level_up_${xpRes.newLevel}`, `Достиг уровня ${xpRes.newLevel}`, true);
+  }
+} catch (e) {
+  console.error('Error adding XP from attempt:', e);
+}
       // обновляем статистику пользователя
       user.stats.totalAttempts = newUserAttempts;
       user.stats.avgScore = roundedAvgScore;
@@ -1310,14 +1394,16 @@ if (details.length > 0 && correctInAttempt === 0) {
     };
 
     if (user) {
-      const userSafe = {
-        id: user._id,
-        stats: user.stats,
-        achievementsCount: (user.achievements || []).length,
-        lastActiveAt: user.lastActiveAt
-      };
-      response.userStats = userSafe;
-    }
+  const userSafe = {
+    id: user._id,
+    stats: user.stats,
+    achievementsCount: (user.achievements || []).length,
+    lastActiveAt: user.lastActiveAt,
+    xp: user.xp || 0,
+    level: user.level || 1
+  };
+  response.userStats = userSafe;
+}
 
     res.json(response);
   } catch (err) {

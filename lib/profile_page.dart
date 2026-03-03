@@ -27,6 +27,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String createdAtStr = "";
   String lastActiveStr = "";
 
+  // NEW: XP / Level
+  int xp = 0;
+  int level = 1;
+  static const int XP_PER_LEVEL = 100; // sync with backend or change later
+
   @override
   void initState() {
     super.initState();
@@ -44,96 +49,114 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return iso;
     }
   }
+
   String formatPretty(String? iso) {
-  if (iso == null || iso.isEmpty) return "";
+    if (iso == null || iso.isEmpty) return "";
 
-  try {
-    final dt = DateTime.parse(iso).toLocal();
-    final now = DateTime.now();
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final now = DateTime.now();
 
-    final today = DateTime(now.year, now.month, now.day);
-    final date = DateTime(dt.year, dt.month, dt.day);
+      final today = DateTime(now.year, now.month, now.day);
+      final date = DateTime(dt.year, dt.month, dt.day);
 
-    final diff = date.difference(today).inDays;
+      final diff = date.difference(today).inDays;
 
-    String time = "${_two(dt.hour)}:${_two(dt.minute)}";
+      String time = "${_two(dt.hour)}:${_two(dt.minute)}";
 
-    if (diff == 0) return "Сегодня, $time";
-    if (diff == -1) return "Вчера, $time";
+      if (diff == 0) return "Сегодня, $time";
+      if (diff == -1) return "Вчера, $time";
 
-    const months = [
-      '', 'янв', 'фев', 'мар', 'апр', 'май', 'июн',
-      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
-    ];
+      const months = [
+        '', 'янв', 'фев', 'мар', 'апр', 'май', 'июн',
+        'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'
+      ];
 
-    return "${dt.day} ${months[dt.month]}";
-  } catch (e) {
-    return iso;
-  }
-}
- Future<void> fetchProfile() async {
-  if (mounted) setState(() => isLoading = true);
-
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    // после await надо проверять, что виджет ещё смонтирован
-    if (!mounted) return;
-
-    final token = prefs.getString("token");
-
-    if (token == null) {
-      if (mounted) setState(() => isLoading = false);
-      return;
+      return "${dt.day} ${months[dt.month]}";
+    } catch (e) {
+      return iso;
     }
+  }
 
-    final res = await http.get(
-      Uri.parse("http://10.0.2.2:5000/profile"),
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer $token",
-      },
-    );
+  int _parseInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is double) return v.toInt();
+    if (v is String) {
+      return int.tryParse(v) ?? double.tryParse(v ?? "0")?.toInt() ?? 0;
+    }
+    return 0;
+  }
 
-    if (!mounted) return;
+  double _parseDouble(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is double) return v;
+    if (v is int) return v.toDouble();
+    if (v is String) {
+      return double.tryParse(v) ?? 0.0;
+    }
+    return 0.0;
+  }
 
-    if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      avatarUrl = data["avatarUrl"] ?? data["avatar_url"] ?? "";
-      final stats = data["stats"] ?? {};
-      final ach = data["achievements"] ?? [];
+  Future<void> fetchProfile() async {
+    if (mounted) setState(() => isLoading = true);
 
-      if (mounted) {
-        setState(() {
-          name = data["username"] ?? "";
-          email = data["email"] ?? "";
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
 
-          totalAttempts = (stats["totalAttempts"] ?? stats["total_attempts"] ?? 0) is int
-              ? (stats["totalAttempts"] ?? stats["total_attempts"] ?? 0)
-              : (stats["totalAttempts"] ?? stats["total_attempts"] ?? 0).toInt();
-          successes = (stats["successes"] ?? 0) is int
-              ? (stats["successes"] ?? 0)
-              : (stats["successes"] ?? 0).toInt();
-          avgScore = (stats["avgScore"] ?? stats["avg_score"] ?? 0).toDouble();
-          totalTimeSec = (stats["totalTimeSec"] ?? stats["total_time_sec"] ?? 0) is int
-              ? (stats["totalTimeSec"] ?? stats["total_time_sec"] ?? 0)
-              : (stats["totalTimeSec"] ?? stats["total_time_sec"] ?? 0).toInt();
+      final token = prefs.getString("token");
 
-          achievements = List.from(ach);
-
-          createdAtStr = formatIso(data["createdAt"] ?? data["created_at"]);
-          lastActiveStr = formatIso(data["lastActiveAt"] ?? data["last_active_at"] ?? data["lastActive"]);
-          isLoading = false;
-        });
+      if (token == null) {
+        if (mounted) setState(() => isLoading = false);
+        return;
       }
-    } else {
+
+      final res = await http.get(
+        Uri.parse("http://10.0.2.2:5000/profile"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      );
+
+      if (!mounted) return;
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        avatarUrl = data["avatarUrl"] ?? data["avatar_url"] ?? "";
+        final stats = data["stats"] ?? {};
+        final ach = data["achievements"] ?? [];
+
+        if (mounted) {
+          setState(() {
+            name = data["username"] ?? "";
+            email = data["email"] ?? "";
+
+            totalAttempts = _parseInt(stats["totalAttempts"] ?? stats["total_attempts"] ?? 0);
+            successes = _parseInt(stats["successes"] ?? 0);
+            avgScore = _parseDouble(stats["avgScore"] ?? stats["avg_score"] ?? 0);
+            totalTimeSec = _parseInt(stats["totalTimeSec"] ?? stats["total_time_sec"] ?? 0);
+
+            achievements = List.from(ach);
+
+            createdAtStr = formatIso(data["createdAt"] ?? data["created_at"]);
+            lastActiveStr = formatIso(data["lastActiveAt"] ?? data["last_active_at"] ?? data["lastActive"]);
+
+            // NEW: parse xp/level (backend must return them)
+            xp = _parseInt(data["xp"] ?? 0);
+            level = _parseInt(data["level"] ?? 1);
+
+            isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => isLoading = false);
+      }
+    } catch (e) {
       if (mounted) setState(() => isLoading = false);
     }
-  } catch (e) {
-    // не вызываем setState если виджет уже демонтирован
-    if (mounted) setState(() => isLoading = false);
   }
-}
-
 
   String formatDuration(int seconds) {
     final h = seconds ~/ 3600;
@@ -144,8 +167,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return "${s}с";
   }
 
+  // XP / Level helpers (must mirror backend formula)
+  int xpMinForLevel(int lvl) {
+    if (lvl <= 1) return 0;
+    final base = (lvl - 1);
+    return XP_PER_LEVEL * base * base;
+  }
+
+  int xpMaxForLevel(int lvl) {
+    if (lvl <= 1) return XP_PER_LEVEL;
+    return XP_PER_LEVEL * lvl * lvl;
+  }
+
+  double xpProgressPercent(int xpValue, int lvl) {
+    final minXp = xpMinForLevel(lvl);
+    final maxXp = xpMaxForLevel(lvl);
+    final span = (maxXp - minXp);
+    if (span <= 0) return 0.0;
+    final progress = (xpValue - minXp) / span;
+    if (progress.isNaN) return 0.0;
+    return progress.clamp(0.0, 1.0);
+  }
+
+  int xpToNextLevel(int xpValue, int lvl) {
+    final maxXp = xpMaxForLevel(lvl);
+    final remaining = maxXp - xpValue;
+    return remaining > 0 ? remaining : 0;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final progress = xpProgressPercent(xp, level);
+    final remaining = xpToNextLevel(xp, level);
+
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
@@ -175,7 +229,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    // Profile card
+                    // Profile card with level badge
                     Container(
                       width: double.infinity,
                       decoration: BoxDecoration(
@@ -198,23 +252,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         padding: const EdgeInsets.all(24),
                         child: Column(
                           children: [
-                            // Avatar with border
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 3),
-                              ),
-                              child: CircleAvatar(
-                                radius: 50,
-                                backgroundColor: Colors.white,
-                                backgroundImage: (avatarUrl != null && avatarUrl!.isNotEmpty)
-                                    ? NetworkImage(avatarUrl!)
-                                    : null,
-                                child: (avatarUrl == null || avatarUrl!.isEmpty)
-                                    ? Icon(Icons.person, size: 50, color: Colors.blue)
-                                    : null,
-                              ),
+                            // Avatar with border and level badge
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 3),
+                                  ),
+                                  child: CircleAvatar(
+                                    radius: 50,
+                                    backgroundColor: Colors.white,
+                                    backgroundImage: (avatarUrl != null && avatarUrl!.isNotEmpty)
+                                        ? NetworkImage(avatarUrl!)
+                                        : null,
+                                    child: (avatarUrl == null || avatarUrl!.isEmpty)
+                                        ? Icon(Icons.person, size: 50, color: Colors.blue)
+                                        : null,
+                                  ),
+                                ),
+                                // Level badge (top-right)
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: [
+                                        BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 6),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.shield, size: 16, color: Colors.blue.shade700),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          "Lv $level",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.blue.shade700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              ],
                             ),
                             const SizedBox(height: 16),
                             Text(
@@ -256,7 +343,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
-
+                    const SizedBox(height: 16),
+                    _levelProgressCard(),
                     const SizedBox(height: 20),
 
                     // Stats grid
@@ -333,6 +421,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 16),
+
+                          
                         ],
                       ),
                     ),
@@ -341,130 +432,130 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                     // Achievements
                     Container(
-  width: double.infinity,
-  padding: const EdgeInsets.all(20),
-  decoration: BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(16),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withOpacity(0.05),
-        blurRadius: 10,
-        offset: const Offset(0, 2),
-      ),
-    ],
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      // header
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.emoji_events, color: Colors.amber.shade700, size: 20),
-              const SizedBox(width: 8),
-              const Text(
-                "Достижения",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          TextButton(
-            onPressed: () => context.push('/achievements'),
-            child: const Text("Все →"),
-          ),
-        ],
-      ),
-
-      const SizedBox(height: 16),
-
-      achievements.isEmpty
-          ? Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.grey.shade600),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      "Пока нет достижений",
-                      style: TextStyle(color: Colors.grey.shade700),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : SizedBox(
-              height: 100,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: achievements.length > 5 ? 5 : achievements.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (context, i) {
-                  final a = achievements[i];
-                  final title = a["title"] ?? a["code"] ?? "";
-                  final rawDate = a["earnedAt"] ?? a["earned_at"];
-
-                  final date = formatPretty(rawDate);
-
-                  return Container(
-                    width: 140,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.amber.shade100,
-                          Colors.amber.shade50
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
                         ],
                       ),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.amber.shade200),
-                    ),
-                    child: Column(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  children: [
-    Icon(Icons.emoji_events,
-        color: Colors.amber.shade700, size: 22),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // header
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.emoji_events, color: Colors.amber.shade700, size: 20),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    "Достижения",
+                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                              TextButton(
+                                onPressed: () => context.push('/achievements'),
+                                child: const Text("Все →"),
+                              ),
+                            ],
+                          ),
 
-    Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Colors.amber.shade900,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          date,
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.grey.shade700,
-          ),
-        ),
-      ],
-    ),
-  ],
-),
-                  );
-                },
-              ),
-            ),
-    ],
-  ),
-),
+                          const SizedBox(height: 16),
+
+                          achievements.isEmpty
+                              ? Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.info_outline, color: Colors.grey.shade600),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          "Пока нет достижений",
+                                          style: TextStyle(color: Colors.grey.shade700),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : SizedBox(
+                                  height: 100,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: achievements.length > 5 ? 5 : achievements.length,
+                                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                                    itemBuilder: (context, i) {
+                                      final a = achievements[i];
+                                      final title = a["title"] ?? a["code"] ?? "";
+                                      final rawDate = a["earnedAt"] ?? a["earned_at"];
+
+                                      final date = formatPretty(rawDate);
+
+                                      return Container(
+                                        width: 140,
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Colors.amber.shade100,
+                                              Colors.amber.shade50
+                                            ],
+                                          ),
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(color: Colors.amber.shade200),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Icon(Icons.emoji_events,
+                                                color: Colors.amber.shade700, size: 22),
+
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  title,
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Colors.amber.shade900,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  date,
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: Colors.grey.shade700,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                        ],
+                      ),
+                    ),
 
                     const SizedBox(height: 16),
 
@@ -553,6 +644,248 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
     );
   }
+Widget _levelProgressCard() {
+  final progress = xpProgressPercent(xp, level);
+  final remaining = xpToNextLevel(xp, level);
+  Widget _xpRow(IconData icon, Color color, String text) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 14),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+  void _showXpInfo() {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (_) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            /// handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+
+            Row(
+              children: [
+                Icon(Icons.auto_awesome,
+                    color: Colors.deepPurple.shade400),
+                const SizedBox(width: 8),
+                const Text(
+                  "Что такое XP?",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+
+            Text(
+              "XP — это опыт, который отражает ваш прогресс в обучении.",
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.grey.shade800,
+                height: 1.4,
+              ),
+            ),
+
+            const SizedBox(height: 18),
+
+            const Text(
+              "Как получать XP:",
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            _xpRow(Icons.check_circle, Colors.green,
+                "Правильные решения в тренировках"),
+            _xpRow(Icons.emoji_events, Colors.amber,
+                "Успешное завершение сценариев"),
+            _xpRow(Icons.local_fire_department, Colors.orange,
+                "Серия успешных прохождений"),
+            _xpRow(Icons.workspace_premium, Colors.blue,
+                "Получение достижений"),
+
+            const SizedBox(height: 18),
+
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.deepPurple.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.trending_up,
+                      color: Colors.deepPurple.shade400),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "С каждым уровнем требуется больше XP.",
+                      style: TextStyle(
+                        color: Colors.deepPurple.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
+          ],
+        ),
+      );
+    },
+  );
+}
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+
+        /// HEADER
+        Row(
+          children: [
+            Icon(Icons.auto_awesome, color: Colors.deepPurple.shade400),
+            const SizedBox(width: 8),
+            const Text(
+              "Уровень",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+
+            /// LEVEL BADGE
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.deepPurple.shade50,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                "Lv $level",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.deepPurple.shade700,
+                ),
+              ),
+            )
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        /// XP BAR
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 14,
+            backgroundColor: Colors.grey.shade200,
+            valueColor: AlwaysStoppedAnimation(
+              Colors.deepPurple.shade400,
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 10),
+
+        /// XP TEXT
+       Row(
+  children: [
+    Text(
+      "$xp XP",
+      style: const TextStyle(fontWeight: FontWeight.w600),
+    ),
+
+    const SizedBox(width: 6),
+
+    /// INFO BUTTON
+    InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: _showXpInfo,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Colors.deepPurple.shade50,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          Icons.info_outline,
+          size: 16,
+          color: Colors.deepPurple.shade600,
+        ),
+      ),
+    ),
+
+    const Spacer(),
+
+    Text(
+      "До уровня: $remaining XP",
+      style: TextStyle(color: Colors.grey.shade600),
+    ),
+    
+  ],
+  
+),
+
+      ],
+    ),
+  );
+  
+}
 
   Widget _statCard({
     required IconData icon,
