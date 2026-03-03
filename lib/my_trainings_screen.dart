@@ -539,7 +539,6 @@ Row(
     ),
     const SizedBox(width: 8),
 
-    // 🔥 КНОПКА СБРОСА
     IconButton(
       onPressed: () {
         setState(() {

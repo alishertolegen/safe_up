@@ -13,6 +13,7 @@ import 'forgot_password_screen.dart';
 import 'rating.dart';
 import 'generation_loading_screen.dart';
 import 'AchievementsScreen.dart';
+import 'confirm_email_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
@@ -54,6 +55,13 @@ class StartApp extends StatelessWidget {
             return ResetPasswordScreen(initialEmail: initialEmail);
           },
         ),
+        GoRoute(
+  path: '/confirm-email',
+  builder: (context, state) {
+    final email = state.extra as String;
+    return ConfirmEmailScreen(email: email);
+  },
+),
         GoRoute(
   path: '/generating',
   builder: (context, state) {

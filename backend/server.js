@@ -109,7 +109,9 @@ const userSchema = new mongoose.Schema({
   ],
   passwordResetCode: { type: String, default: null, select: false }, // хеш кода (sha256)
   passwordResetExpires: { type: Date, default: null, select: false },
-
+  emailConfirmed: { type: Boolean, default: false },
+  emailConfirmCode: { type: String, default: null, select: false }, // sha256 хеш кода
+  emailConfirmExpires: { type: Date, default: null, select: false },
   lastActiveAt: { type: Date, default: Date.now } 
 }, { timestamps: true });
 
@@ -672,7 +674,35 @@ function validateEmail(rawEmail) {
 
   return errors;
 }
+async function sendConfirmEmail(toEmail, code) {
+  const from = process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@example.com';
+  const subject = 'Код подтверждения email';
+  const text = `Ваш код подтверждения: ${code}\n\nКод действителен 24 часа. Если вы не регистрировались — проигнорируйте это письмо.`;
+  const html = `<div style="font-family: Arial, sans-serif; padding:20px;">
+    <h2>Подтверждение email</h2>
+    <p>Здравствуйте!</p>
+    <p>Для завершения регистрации используйте код:</p>
+    <div style="font-size:24px; font-weight:bold; margin:16px 0; color:#2a7ae2;">${code}</div>
+    <p>Код действует 24 часа.</p>
+    <hr style="margin-top:20px;" />
+    <p style="color:#777; font-size:12px;">Письмо отправлено автоматически.</p>
+  </div>`;
 
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.warn(`SMTP not configured — confirm code for ${toEmail}: ${code}`);
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: Number(process.env.SMTP_PORT || 587) === 465,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+  });
+
+  const mailOptions = { from, to: toEmail, subject, text, html };
+  await transporter.sendMail(mailOptions);
+}
 // Отправка письма с кодом сброса пароля.
 async function sendResetEmail(toEmail, code) {
   const from = process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@example.com';
@@ -796,8 +826,28 @@ app.post("/register", async (req, res) => {
 
     await newUser.save();
 
-    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
-    res.status(201).json({ message: "Регистрация успешна", token });
+    // Генерируем 6-значный код подтверждения (крипто-безопасно)
+    const confirmCode = String(crypto.randomInt(100000, 1000000)); // 100000..999999
+    const confirmHash = crypto.createHash('sha256').update(confirmCode).digest('hex');
+    const confirmExpires = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24 часа
+
+    // Сохраняем хеш и срок
+    newUser.emailConfirmCode = confirmHash;
+    newUser.emailConfirmExpires = confirmExpires;
+    await newUser.save();
+
+    // Отправляем письмо (лог в консоль при отсутствии SMTP)
+    try {
+      await sendConfirmEmail(emailNorm, confirmCode);
+    } catch (mailErr) {
+      console.error("Ошибка отправки письма подтверждения:", mailErr);
+    }
+
+    // Отвечаем пользователю — регистрация создана, нужно подтвердить email
+    // (не выдаём JWT до подтверждения)
+    res.status(201).json({
+      message: "Регистрация успешна. На ваш email отправлен код подтверждения. Подтвердите почту, чтобы войти."
+    });
 
   } catch (err) {
     console.error("Register error:", err);
@@ -817,7 +867,12 @@ app.post("/login", async (req, res) => {
 
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(400).json({ message: "Неверный email или пароль" });
-
+        // после проверки пароля
+    if (!user.emailConfirmed) {
+      return res.status(403).json({
+        message: "Email не подтверждён. Проверьте почту или запросите повторную отправку кода (/resend-confirm)."
+      });
+    }
     await User.findByIdAndUpdate(user._id, { lastActiveAt: new Date() });
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
     res.json({ message: "Успешный вход", token });
@@ -863,7 +918,74 @@ app.post("/forgot-password", async (req, res) => {
     res.status(500).json({ message: "Ошибка сервера" });
   }
 });
+// Тело: { email, code }
+app.post("/confirm-email", async (req, res) => {
+  try {
+    const { email, code } = req.body || {};
+    if (!email || !code) return res.status(400).json({ message: "Нужны email и code" });
 
+    const emailNorm = String(email).toLowerCase().trim();
+    const user = await User.findOne({ email: emailNorm }).select("+emailConfirmCode +emailConfirmExpires +password");
+    if (!user || !user.emailConfirmCode || !user.emailConfirmExpires) {
+      return res.status(400).json({ message: "Неверный код или email" });
+    }
+
+    if (user.emailConfirmExpires < new Date()) {
+      return res.status(400).json({ message: "Код подтверждения истёк" });
+    }
+
+    const codeHash = crypto.createHash('sha256').update(String(code)).digest('hex');
+    if (codeHash !== user.emailConfirmCode) {
+      return res.status(400).json({ message: "Неверный код подтверждения" });
+    }
+
+    // Подтверждаем электронную почту
+    user.emailConfirmed = true;
+    user.emailConfirmCode = null;
+    user.emailConfirmExpires = null;
+    await user.save();
+
+    // Выдаём JWT сразу после подтверждения
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
+
+    res.json({ message: "Email подтверждён", token });
+  } catch (err) {
+    console.error("confirm-email error:", err);
+    res.status(500).json({ message: "Ошибка сервера" });
+  }
+});
+// Тело: { email }
+app.post("/resend-confirm", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ message: "Email обязателен" });
+
+    const emailNorm = String(email).toLowerCase().trim();
+    const user = await User.findOne({ email: emailNorm });
+    if (!user) return res.json({ message: "Если пользователь существует, код отправлен." }); // не раскрываем существование
+
+    if (user.emailConfirmed) return res.status(400).json({ message: "Email уже подтверждён." });
+
+    const confirmCode = String(crypto.randomInt(100000, 1000000));
+    const confirmHash = crypto.createHash('sha256').update(confirmCode).digest('hex');
+    const confirmExpires = new Date(Date.now() + 1000 * 60 * 60 * 24);
+
+    user.emailConfirmCode = confirmHash;
+    user.emailConfirmExpires = confirmExpires;
+    await user.save();
+
+    try {
+      await sendConfirmEmail(emailNorm, confirmCode);
+    } catch (mailErr) {
+      console.error("Ошибка отправки письма подтверждения:", mailErr);
+    }
+
+    res.json({ message: "Если пользователь существует, на него отправлен код подтверждения." });
+  } catch (err) {
+    console.error("resend-confirm error:", err);
+    res.status(500).json({ message: "Ошибка сервера" });
+  }
+});
 // Тело: { email, code, newPassword }
 app.post("/reset-password", async (req, res) => {
   try {

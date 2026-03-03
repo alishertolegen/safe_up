@@ -116,29 +116,21 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       if (response.statusCode == 201) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString("userEmail", email);
-        if (data != null && data["token"] != null) {
-          await prefs.setString("token", data["token"]);
-        }
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.white),
-                  SizedBox(width: 12),
-                  Text("Регистрация успешна!"),
-                ],
-              ),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          );
-          context.go("/home");
-        }
-        return;
+if (response.statusCode == 201) {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString("userEmail", email);
+
+  if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Код отправлен на почту 📩"),
+      ),
+    );
+
+    context.go('/confirm-email', extra: email);
+  }
+  return;
+}
       }
 
       String serverMessage = (data is Map && data["message"] != null)
