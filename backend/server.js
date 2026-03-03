@@ -89,13 +89,14 @@ const userSchema = new mongoose.Schema({
     avgScore: { type: Number, default: 0 }, 
     totalTimeSec: { type: Number, default: 0 }
   },
-  achievements: [
-    {
-      code: String,      
-      title: String,     
-      earnedAt: Date
-    }
-  ],
+achievements: [
+  {
+    code: { type: String, required: true },
+    title: { type: String, default: "" },
+    earnedAt: { type: Date, default: Date.now },
+    manual: { type: Boolean, default: false } // отметка, добавлено вручную/автоматически
+  }
+],
   passwordResetCode: { type: String, default: null, select: false }, // хеш кода (sha256)
   passwordResetExpires: { type: Date, default: null, select: false },
 
@@ -120,6 +121,18 @@ const sceneSchema = new mongoose.Schema({
   choices: [choiceSchema],
   defaultChoiceId: String
 }, { _id: false });
+
+/** Achievement — словарь достижений */
+const achievementSchema = new mongoose.Schema({
+  code: { type: String, required: true, unique: true, index: true }, // short id, e.g. "first_success"
+  title: { type: String, required: true },
+  description: { type: String, default: "" },
+  iconUrl: { type: String, default: "" }, // иконка в cloudinary или ссылка
+  points: { type: Number, default: 0 }, // опционально
+  hidden: { type: Boolean, default: false } // скрытые достижения
+}, { timestamps: true });
+
+const Achievement = mongoose.model("Achievement", achievementSchema);
 
 const trainingSchema = new mongoose.Schema({
   title: { type: String, required: true },
@@ -789,6 +802,65 @@ app.get("/users", async(req, res) =>{
   }
 });
 
+// Получить все достижения (плюс фильтр)
+app.get("/achievements", async (req, res) => {
+  try {
+    const { q, includeHidden } = req.query;
+    const filter = {};
+    if (q) filter.$or = [{ code: q }, { title: new RegExp(q, "i") }];
+    if (!includeHidden) filter.hidden = false;
+    const list = await Achievement.find(filter).sort({ createdAt: -1 }).limit(500);
+    res.json(list);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Ошибка при получении достижений" });
+  }
+});
+
+// Создать достижение (требует авторизации — добавьте проверку роли при необходимости)
+app.post("/achievements", authMiddleware, async (req, res) => {
+  try {
+    const { code, title, description, iconUrl, points, hidden } = req.body || {};
+    if (!code || !title) return res.status(400).json({ message: "Нужны code и title" });
+
+    const exist = await Achievement.findOne({ code });
+    if (exist) return res.status(400).json({ message: "Достижение с таким code уже есть" });
+
+    const a = new Achievement({ code, title, description, iconUrl, points: Number(points || 0), hidden: !!hidden });
+    await a.save();
+    res.status(201).json(a);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Ошибка при создании достижения" });
+  }
+});
+
+// Обновить достижение по code
+app.put("/achievements/:code", authMiddleware, async (req, res) => {
+  try {
+    const upd = req.body || {};
+    const a = await Achievement.findOneAndUpdate({ code: req.params.code }, upd, { new: true });
+    if (!a) return res.status(404).json({ message: "Достижение не найдено" });
+    res.json(a);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Ошибка при обновлении" });
+  }
+});
+
+// Удалить достижение (можно менять на soft-delete через hidden)
+app.delete("/achievements/:code", authMiddleware, async (req, res) => {
+  try {
+    const a = await Achievement.findOneAndDelete({ code: req.params.code });
+    if (!a) return res.status(404).json({ message: "Достижение не найдено" });
+    res.json({ message: "Удалено" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Ошибка при удалении" });
+  }
+});
+
+
 app.get("/profile", authMiddleware, async(req, res) =>{
   try{
     const user = await User.findById(req.userId, "-password");
@@ -814,18 +886,27 @@ app.patch("/profile", authMiddleware, async (req, res) => {
 });
 app.post("/profile/achievements", authMiddleware, async (req, res) => {
   try {
-    const { code, title } = req.body;
-    if (!code || !title) return res.status(400).json({ message: "Нужны code и title" });
+    const { code, title, earnedAt } = req.body || {};
+    if (!code) return res.status(400).json({ message: "Нужен code" });
 
-    const ach = { code, title, earnedAt: new Date() };
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: "Пользователь не найден" });
 
     // защита от дубликатов по code
-    if (!user.achievements.some(a => a.code === code)) {
-      user.achievements.push(ach);
-      await user.save();
+    if ((user.achievements || []).some(a => a.code === code)) {
+      const out = user.toObject();
+      delete out.password;
+      return res.json(out);
     }
+
+    // ищем в справочнике
+    const ach = await Achievement.findOne({ code });
+    const achTitle = ach ? ach.title : (title || code);
+
+    user.achievements = user.achievements || [];
+    user.achievements.push({ code, title: achTitle, earnedAt: earnedAt ? new Date(earnedAt) : new Date(), manual: true });
+
+    await user.save();
 
     const out = user.toObject();
     delete out.password;
@@ -835,6 +916,7 @@ app.post("/profile/achievements", authMiddleware, async (req, res) => {
     res.status(500).json({ message: "Ошибка при добавлении достижения" });
   }
 });
+
 
 
 /**
@@ -1052,10 +1134,13 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
 
       user.lastActiveAt = new Date();
 
-      // Простое достижение: первая успешная попытка
+      // при успехе — убедиться, что справочник содержит код; если нет — создаём дефолтное достижение
       if (success && !(user.achievements || []).some(a => a.code === 'first_success')) {
-        user.achievements = user.achievements || [];
-        user.achievements.push({ code: 'first_success', title: 'Первая успешная тренировка', earnedAt: new Date() });
+        const def = await Achievement.findOne({ code: 'first_success' });
+        if (!def) {
+          await Achievement.create({ code: 'first_success', title: 'Первая успешная тренировка', description: 'Завершить первую тренировку успешно' });
+        }
+        user.achievements.push({ code: 'first_success', title: 'Первая успешная тренировка', earnedAt: new Date(), manual: false });
       }
 
       await user.save();
