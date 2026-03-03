@@ -87,7 +87,12 @@ const userSchema = new mongoose.Schema({
     totalAttempts: { type: Number, default: 0 },
     successes: { type: Number, default: 0 },
     avgScore: { type: Number, default: 0 }, 
-    totalTimeSec: { type: Number, default: 0 }
+    totalTimeSec: { type: Number, default: 0 },
+
+    currentWinStreak: { type: Number, default: 0 },
+    bestWinStreak: { type: Number, default: 0 },
+    riskyChoices: { type: Number, default: 0 },
+    failedTrainings: [{ type: mongoose.Schema.Types.ObjectId, ref: "Training" }]
   },
 achievements: [
   {
@@ -165,7 +170,35 @@ const trainingSchema = new mongoose.Schema({
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   isPublished: { type: Boolean, default: false }
 }, { timestamps: true });
+async function giveAchievementToUser(user, code, fallbackTitle = null, manual = false) {
+  if (!user) return false;
+  // уже есть?
+  if ((user.achievements || []).some(a => a.code === code)) return false;
 
+  // ищем в справочнике
+  let ach = await Achievement.findOne({ code });
+  if (!ach) {
+    // создаём минимальный дефолт (чтобы всегда был reference в справочнике)
+    ach = await Achievement.create({
+      code,
+      title: fallbackTitle || code,
+      description: fallbackTitle ? '' : 'Автоматически созданное достижение',
+      points: 0,
+      hidden: false
+    });
+  }
+
+  user.achievements = user.achievements || [];
+  user.achievements.push({
+    code,
+    title: ach.title || (fallbackTitle || code),
+    earnedAt: new Date(),
+    manual: !!manual
+  });
+
+  await user.save();
+  return true;
+}
 const Training = mongoose.model("Training", trainingSchema);
 
 /**
@@ -1117,32 +1150,129 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
 
     const user = await User.findById(req.userId);
     if (user) {
-      const uStats = user.stats || { totalAttempts: 0, successes: 0, avgScore: 0, totalTimeSec: 0 };
+      // старая статистика
+      const uStats = user.stats || {
+        totalAttempts: 0,
+        successes: 0,
+        avgScore: 0,
+        totalTimeSec: 0,
+        currentWinStreak: 0,
+        bestWinStreak: 0,
+        riskyChoices: 0,
+        failedTrainings: []
+      };
+
       const prevUserAttempts = uStats.totalAttempts || 0;
       const prevUserAvgScore = typeof uStats.avgScore === "number" ? uStats.avgScore : 0;
       const newUserAttempts = prevUserAttempts + 1;
-      // Средний балл пользователя пересчитываем по totalScore
+
+      // перерасчёт среднего балла
       const newAvgScore = prevUserAttempts === 0
         ? totalScore
         : ( (prevUserAvgScore * prevUserAttempts) + totalScore ) / newUserAttempts;
-      const roundedAvgScore = Math.round(newAvgScore * 100) / 100; 
+      const roundedAvgScore = Math.round(newAvgScore * 100) / 100;
 
+      // считаем рискованные выборы в этой попытке (consequenceType === 'fatal')
+      const riskyInAttempt = details.reduce((acc, d) => acc + ((d.consequenceType === 'warning') ? 1 : 0), 0);
+      const correctInAttempt = details.reduce((acc, d) => acc + ((d.consequenceType === 'correct') ? 1 : 0), 0);
+
+      // обновляем статистику пользователя
       user.stats.totalAttempts = newUserAttempts;
       user.stats.avgScore = roundedAvgScore;
       user.stats.totalTimeSec = (uStats.totalTimeSec || 0) + (timeSec || 0);
       if (success) user.stats.successes = (uStats.successes || 0) + 1;
 
-      user.lastActiveAt = new Date();
+      // обновляем счётчики риска/безопасности
+      user.stats.riskyChoices = (uStats.riskyChoices || 0) + riskyInAttempt;
 
-      // при успехе — убедиться, что справочник содержит код; если нет — создаём дефолтное достижение
-      if (success && !(user.achievements || []).some(a => a.code === 'first_success')) {
-        const def = await Achievement.findOne({ code: 'first_success' });
-        if (!def) {
-          await Achievement.create({ code: 'first_success', title: 'Первая успешная тренировка', description: 'Завершить первую тренировку успешно' });
+      // обработка серий (win streak)
+      if (success) {
+        user.stats.currentWinStreak = (uStats.currentWinStreak || 0) + 1;
+        if ((user.stats.currentWinStreak || 0) > (uStats.bestWinStreak || 0)) {
+          user.stats.bestWinStreak = user.stats.currentWinStreak;
         }
-        user.achievements.push({ code: 'first_success', title: 'Первая успешная тренировка', earnedAt: new Date(), manual: false });
+      } else {
+        // при провале — добавляем тренинг в failedTrainings, если ещё нет
+        user.stats.currentWinStreak = 0;
+        user.stats.failedTrainings = user.stats.failedTrainings || [];
+        const alreadyFailed = (user.stats.failedTrainings || []).some(id => String(id) === String(training._id));
+        if (!alreadyFailed) user.stats.failedTrainings.push(training._id);
       }
 
+      user.lastActiveAt = new Date();
+
+      // --- выдать автоматические достижения по правилам ---
+
+      // 1) Первая успешная тренировка (если ещё нет) — частично был раньше, но дублирование безопасно
+      if (success && !(user.achievements || []).some(a => a.code === 'first_success')) {
+        await giveAchievementToUser(user, 'first_success', 'Первая успешная тренировка');
+      }
+
+      // 2) Милestones по количеству успешных прохождений
+      const succCount = user.stats.successes || 0;
+      if (succCount >= 5) await giveAchievementToUser(user, '5_successes', 'Уверенный старт');
+      if (succCount >= 10) await giveAchievementToUser(user, '10_successes', 'Опытный');
+      if (succCount >= 50) await giveAchievementToUser(user, '50_successes', 'Профи');
+
+      // 3) Попытки (100 попыток)
+      if ((user.stats.totalAttempts || 0) >= 100) {
+        await giveAchievementToUser(user, '100_attempts', 'Не сдаюсь');
+      }
+
+      // 4) Серии (win streaks)
+      const streak = user.stats.currentWinStreak || 0;
+      if (streak >= 3) await giveAchievementToUser(user, '3_win_streak', 'Серия 3');
+      if (streak >= 5) await giveAchievementToUser(user, '5_win_streak', 'Серия 5');
+      if (streak >= 10) await giveAchievementToUser(user, '10_win_streak', 'Непобедимый');
+
+      // 5) perfect_run — пройдено 'success' (все правильные)
+      if (success) {
+        await giveAchievementToUser(user, 'perfect_run', 'Идеально');
+      }
+
+      // 6) fast_thinker — если прошёл заметно быстрее, чем среднее по тренировке
+      try {
+        if (timeSec && training && typeof training.stats.avgTimeSec === 'number' && training.stats.avgTimeSec > 0) {
+          // если время меньше 60% от среднего — даём достижение
+          if (timeSec < Math.round(training.stats.avgTimeSec * 0.6)) {
+            await giveAchievementToUser(user, 'fast_thinker', 'Быстрое решение');
+          }
+        }
+      } catch (e) {
+        // silent
+      }
+
+      // 7) risk_taker — накопительное число рискованных выборов >= 10
+      if ((user.stats.riskyChoices || 0) >= 10) {
+        await giveAchievementToUser(user, 'risk_taker', 'Рискованный игрок');
+      }
+
+      // 8) safe_player — если за >=10 попыток ни одной fatal (приз для осторожных)
+      if ((user.stats.totalAttempts || 0) >= 10 && (user.stats.riskyChoices || 0) === 0) {
+        await giveAchievementToUser(user, 'safe_player', 'Осторожный');
+      }
+
+      // 9) comeback — если ранее была неудачная попытка по этому тренингу, а теперь success
+      if (success) {
+        user.stats.failedTrainings = user.stats.failedTrainings || [];
+        const idx = (user.stats.failedTrainings || []).findIndex(id => String(id) === String(training._id));
+        if (idx !== -1) {
+          // выдаём и удаляем из failedTrainings
+          await giveAchievementToUser(user, 'comeback', 'Вторая попытка');
+          user.stats.failedTrainings.splice(idx, 1);
+        }
+      }
+
+      // 10) meta: achievement_hunter — когда у пользователя >= 10 достижений
+      const achCount = (user.achievements || []).length;
+      if (achCount >= 10) {
+        await giveAchievementToUser(user, 'achievement_hunter', 'Охотник за достижениями');
+      }
+      // 11) Антигерой — все ответы неправильные (нет ни одного correct)
+if (details.length > 0 && correctInAttempt === 0) {
+  await giveAchievementToUser(user, 'all_wrong', 'Антигерой');
+}
+      // сохраняем пользователя
       await user.save();
     }
 
