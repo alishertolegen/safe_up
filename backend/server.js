@@ -200,7 +200,17 @@ async function giveAchievementToUser(user, code, fallbackTitle = null, manual = 
   return true;
 }
 const Training = mongoose.model("Training", trainingSchema);
-
+const SCORE_MAP = {
+  correct: 10,
+  warning: 0,
+  fatal: 0,
+  neutral: 0
+};
+function scoreForType(consequenceType) {
+  if (!consequenceType) return 0;
+  const t = String(consequenceType).trim();
+  return typeof SCORE_MAP[t] === 'number' ? SCORE_MAP[t] : 0;
+}
 /**
  * Auth middleware
  */
@@ -305,7 +315,7 @@ Each scene object must have:
   "description":"paragraph describing the situation",
   "hint":"1-2 sentence hint",
   "choices":[
-    { "id":"a","text":"...","consequenceType":"correct|warning|fatal|neutral","consequenceText":"...","scoreDelta": integer },
+    { "id":"a","text":"...","consequenceType":"correct|warning|fatal|neutral","consequenceText":"..." },
     ...
   ],
   "defaultChoiceId":"a"
@@ -346,13 +356,17 @@ Return exactly one JSON object. Use ${choicesPerScene} choices per scene. Make o
       location: parsed.location || (location || { name: '', floor: '', extra: '' }),
       difficulty: parsed.difficulty || 'medium',
       scenes: Array.isArray(parsed.scenes) ? parsed.scenes.map((it, idx) => {
-        const choices = Array.isArray(it.choices) ? it.choices.map((c, ci) => ({
-          id: String(c.id || String.fromCharCode(97 + ci)),
-          text: String(c.text || '').trim(),
-          consequenceType: String(c.consequenceType || 'neutral').trim(),
-          consequenceText: String(c.consequenceText || '').trim(),
-          scoreDelta: Number(c.scoreDelta || 0)
-        })) : [];
+        const choices = Array.isArray(it.choices) ? it.choices.map((c, ci) => {
+  const consequenceType = (String(c.consequenceType || 'neutral')).trim();
+  return {
+    id: String(c.id || String.fromCharCode(97 + ci)),
+    text: String(c.text || '').trim(),
+    consequenceType,
+    consequenceText: String(c.consequenceText || '').trim(),
+    // игнорируем c.scoreDelta — назначаем server-side
+    scoreDelta: scoreForType(consequenceType)
+  };
+}) : [];
         return {
           id: Number(it.id) || (idx + 1),
           title: String(it.title || `Сцена ${idx+1}`).trim(),
@@ -385,26 +399,28 @@ Return exactly one JSON object. Use ${choicesPerScene} choices per scene. Make o
 
 
 /** фолбэк простой скелетон только title */
-function simpleGenerateScenesSkeleton(title, scenesCount = 5, choicesPerScene = 3) {
+function simpleGenerateScenes(title, scenesCount = 5, choicesPerScene = 3) {
   const base = (title || "Сценарий").trim();
   const scenes = [];
   for (let i = 1; i <= scenesCount; i++) {
     const choices = [];
     for (let c = 0; c < choicesPerScene; c++) {
-      const id = String.fromCharCode(97 + c); // a, b, c... варианттар
+      const id = String.fromCharCode(97 + c);
+      const isCorrect = c === 0; // первый вариант — корректный по умолчанию
+      const consequenceType = isCorrect ? "correct" : (c === 1 ? "warning" : "fatal");
       choices.push({
         id,
-        text: `Вариант ${id.toUpperCase()} для сцены ${i}`,
-        consequenceType: "neutral",
-        consequenceText: "",
-        scoreDelta: 0
+        text: isCorrect ? `Правильное действие ${id.toUpperCase()} при ситуации ${i}` : `Неправильное/менее удачное действие ${id.toUpperCase()} при ситуации ${i}`,
+        consequenceType,
+        consequenceText: isCorrect ? `Это безопасный и рекомендованный вариант.` : (c === 1 ? "Это рискованно — приведёт к замедлению эвакуации." : "Это опасно — возможны жертвы."),
+        scoreDelta: scoreForType(consequenceType)
       });
     }
     scenes.push({
       id: i,
       title: `${base} — Сцена ${i}`,
-      description: `Короткое описание для сцены ${i}.`,
-      hint: `Подсказка для сцены ${i}.`,
+      description: `Подробное описание ситуации ${i}, где участнику нужно принять решение в условиях ограниченного времени.`,
+      hint: `Подумайте о безопасности людей и возможных путях эвакуации.`,
       choices,
       defaultChoiceId: choices[0].id
     });
@@ -462,7 +478,7 @@ Return an array with ${scenesCount} objects. Each object must have:
 
 Do NOT output any explanation or extra text — ONLY the JSON array.
 Example element:
-{"id":1,"title":"...","description":"...","hint":"...","choices":[{"id":"a","text":"...","consequenceType":"correct","consequenceText":"...","scoreDelta":10}, ...],"defaultChoiceId":"a"}
+{"id":1,"title":"...","description":"...","hint":"...","choices":[{"id":"a","text":"...","consequenceType":"correct","consequenceText":"..."}, ...],"defaultChoiceId":"a"}
 `;
 
   const body = {
@@ -482,13 +498,16 @@ Example element:
     if (!Array.isArray(parsed)) throw new Error('Parsed not array');
     // Normalize 
     const scenes = parsed.map((it, idx) => {
-      const choices = Array.isArray(it.choices) ? it.choices.map((c, ci) => ({
-        id: String(c.id || String.fromCharCode(97 + ci)),
-        text: String(c.text || '').trim(),
-        consequenceType: (String(c.consequenceType || 'neutral')).trim(),
-        consequenceText: String(c.consequenceText || '').trim(),
-        scoreDelta: Number(c.scoreDelta || 0)
-      })) : [];
+      const choices = Array.isArray(it.choices) ? it.choices.map((c, ci) => {
+  const consequenceType = (String(c.consequenceType || 'neutral')).trim();
+  return {
+    id: String(c.id || String.fromCharCode(97 + ci)),
+    text: String(c.text || '').trim(),
+    consequenceType,
+    consequenceText: String(c.consequenceText || '').trim(),
+    scoreDelta: scoreForType(consequenceType)
+  };
+}) : [];
       return {
         id: Number(it.id) || (idx + 1),
         title: String(it.title || `Сцена ${idx+1}`).trim(),
