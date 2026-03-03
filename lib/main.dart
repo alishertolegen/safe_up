@@ -11,7 +11,7 @@ import 'ProfileEditScreen.dart';
 import 'reset_password_screen.dart';
 import 'forgot_password_screen.dart';
 import 'rating.dart';
-
+import 'generation_loading_screen.dart';
 
 void main() {
   runApp(const StartApp());
@@ -49,6 +49,13 @@ class StartApp extends StatelessWidget {
             return ResetPasswordScreen(initialEmail: initialEmail);
           },
         ),
+        GoRoute(
+  path: '/generating',
+  builder: (context, state) {
+    final args = state.extra as Map<String, dynamic>;
+    return GenerationLoadingScreen(payload: args['payload'], token: args['token']);
+  },
+),
         ShellRoute(
           builder: (context, state, child) {
             final selectedIndex = _calculateSelectedIndex(state);

@@ -53,82 +53,47 @@ class _CreateTrainingScreenState extends State<CreateTrainingScreen> {
     _otherLocationController.dispose();
     super.dispose();
   }
+Map<String, dynamic> _buildPayload() {
+  final String? titleInput = _titleController.text.trim().isEmpty
+      ? null
+      : _titleController.text.trim();
 
-  Future<void> _createTraining() async {
-    setState(() => _isLoading = true);
+  final Map<String, dynamic> payload = {};
+  payload['aiGenerate'] = true;
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
+  if (titleInput != null) payload['title'] = titleInput;
+  if (_selectedType.isNotEmpty) payload['type'] = _selectedType;
+  payload['difficulty'] = _selectedDifficulty;
 
-      if (token == null || token.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Требуется авторизация. Войдите в аккаунт.')));
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final String? titleInput = _titleController.text.trim().isEmpty
-          ? null
-          : _titleController.text.trim();
-
-      final Map<String, dynamic> payload = {};
-      payload['aiGenerate'] = true;
-
-      if (titleInput != null) payload['title'] = titleInput;
-      if (_selectedType.isNotEmpty) payload['type'] = _selectedType;
-      payload['difficulty'] = _selectedDifficulty;
-
-      if (_selectedLocation == '🎲 Случайная') {
-        // omit location
-      } else if (_selectedLocation == 'Другое') {
-        final other = _otherLocationController.text.trim();
-        if (other.isNotEmpty) {
-          payload['location'] = {'name': other};
-        }
-      } else {
-        payload['location'] = {'name': _selectedLocation};
-      }
-
-      final uri = Uri.parse('$apiBase/trainings');
-      final resp = await http.post(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(payload),
-      );
-
-      if (resp.statusCode == 201) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Тренировка успешно сгенерирована')));
-        if (mounted) context.go('/mytrainings');
-      } else if (resp.statusCode == 401 || resp.statusCode == 403) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Неавторизован. Пожалуйста, войдите.')));
-      } else {
-        String msg = 'Сервер вернул ${resp.statusCode}.';
-        try {
-          final body = resp.body.isNotEmpty ? jsonDecode(resp.body) : null;
-          if (body != null && body['message'] != null) msg = body['message'];
-        } catch (_) {}
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $msg')));
-      }
-    } catch (e, st) {
-      print('Create training error: $e\n$st');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка при создании тренировки: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+  if (_selectedLocation == '🎲 Случайная') {
+    // omit location
+  } else if (_selectedLocation == 'Другое') {
+    final other = _otherLocationController.text.trim();
+    if (other.isNotEmpty) {
+      payload['location'] = {'name': other};
     }
+  } else {
+    payload['location'] = {'name': _selectedLocation};
   }
+
+  return payload;
+}
+Future<void> _createTraining() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('token');
+
+  if (token == null || token.isEmpty) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Требуется авторизация. Войдите в аккаунт.')));
+    return;
+  }
+
+  final payload = _buildPayload();
+
+  if (!mounted) return;
+  context.push('/generating', extra: {'payload': payload, 'token': token});
+}
 
   Widget _buildTypeSelector() {
     return Wrap(

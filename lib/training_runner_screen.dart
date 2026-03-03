@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/training.dart';
-
+import 'dart:math';
 const String API_BASE = String.fromEnvironment('API_BASE', defaultValue: 'http://10.0.2.2:5000');
 
 class TrainingRunnerScreen extends StatefulWidget {
@@ -23,13 +23,23 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
   late Timer _timer;
   int _elapsedSec = 0;
   bool _submitting = false;
-
+  late List<Scene> _shuffledScenes;
+late Map<int, List<Choice>> _shuffledChoices;
+void _shuffleContent() {
+  final rng = Random();
+  _shuffledScenes = List.of(widget.training.scenes);
+  _shuffledChoices = {
+    for (var s in widget.training.scenes)
+      s.id: List.of(s.choices)..shuffle(rng)
+  };
+}
   @override
   void initState() {
     super.initState();
     _startTimer();
+    _shuffleContent();
   }
-
+  
   @override
   void dispose() {
     _timer.cancel();
@@ -48,7 +58,40 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
   }
-
+void _showLoadingDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => PopScope(
+      canPop: false,
+      child: Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(
+                color: Colors.blue.shade600,
+                strokeWidth: 3,
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Подсчёт результатов...',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Отправляем ваши ответы',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
   void _handleTapChoice(int sceneId, String choiceId) {
     if (_results.containsKey(sceneId)) return;
 
@@ -68,25 +111,12 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
         correctChoiceText: correct.text,
       );
     });
+if (_allAnswered && !_submitting) {
+  Future.delayed(const Duration(milliseconds: 1500), () {
+    if (mounted && !_submitting) _submitAttempt();
+  });
+}
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              isCorrect ? Icons.check_circle : Icons.cancel,
-              color: Colors.white,
-            ),
-            const SizedBox(width: 8),
-            Text(isCorrect ? 'Правильно!' : 'Неправильно'),
-          ],
-        ),
-        backgroundColor: isCorrect ? Colors.green : Colors.red,
-        duration: const Duration(milliseconds: 1200),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
   }
 
   void _goNext() {
@@ -113,6 +143,7 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
     if (_submitting) return;
     final token = await _readToken();
     if (token == null || token.isEmpty) {
+      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
       _showMessage('Требуется авторизация. Войдите в аккаунт.');
       return;
     }
@@ -136,11 +167,13 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
           body: body);
 
       if (res.statusCode == 401) {
+        if (Navigator.of(context).canPop()) Navigator.of(context).pop();
         _showMessage('Неавторизован. Пожалуйста, войдите снова.');
         setState(() => _submitting = false);
         return;
       }
       if (res.statusCode != 200) {
+        if (Navigator.of(context).canPop()) Navigator.of(context).pop();
         _showMessage('Ошибка сервера: ${res.statusCode}');
         setState(() => _submitting = false);
         return;
@@ -152,9 +185,11 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
       _timer.cancel();
 
       final updatedStats = data['updatedStats'] as Map<String, dynamic>?;
-
-      _showResultDialog(result, updatedStats);
+      if (!mounted) return;
+if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+_showResultDialog(result, updatedStats);
     } catch (err) {
+      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
       _showMessage('Ошибка сети: $err');
       setState(() => _submitting = false);
     }
@@ -165,6 +200,7 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
   }
 
   void _showResultDialog(Map<String, dynamic>? result, Map<String, dynamic>? updatedStats) {
+  final router = GoRouter.of(context);
     final totalScore = result?['totalScore']?.toString() ?? '-';
     final correctAnswers = result?['correctAnswers']?.toString() ?? '-';
     final totalChoices = result?['totalChoices']?.toString() ?? '-';
@@ -257,36 +293,36 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                Navigator.of(context).pop();
-                context.go('/profile');
-              },
-              child: const Text('Закрыть'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                setState(() {
-                  _answers.clear();
-                  _results.clear();
-                  _elapsedSec = 0;
-                  _currentIndex = 0;
-                  _startTimer();
-                  _submitting = false;
-                });
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text('Пройти ещё раз'),
-            ),
+TextButton(
+  onPressed: () {
+    Navigator.of(ctx).pop();
+    router.go('/profile');
+  },
+  child: const Text('Закрыть'),
+),
+//             ElevatedButton(
+//               onPressed: () {
+//                 Navigator.of(ctx).pop();
+//                 setState(() {
+//   _submitting = false; 
+//   _answers.clear();
+//   _results.clear();
+//   _elapsedSec = 0;
+//   _currentIndex = 0;
+//   _shuffleContent();
+//   _startTimer();
+// });
+//               },
+//               style: ElevatedButton.styleFrom(
+//                 backgroundColor: Colors.blue,
+//                 foregroundColor: Colors.white,
+//                 elevation: 0,
+//                 shape: RoundedRectangleBorder(
+//                   borderRadius: BorderRadius.circular(12),
+//                 ),
+//               ),
+//               child: const Text('Пройти ещё раз'),
+//             ),
           ],
         );
       },
@@ -301,7 +337,7 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scenes = widget.training.scenes;
+    final scenes = _shuffledScenes;
     final scene = scenes[_currentIndex];
     final answeredCount = _results.length;
     final total = scenes.length;
@@ -487,9 +523,9 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
                   ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: scene.choices.length,
-                    itemBuilder: (ctx, i) {
-                      final c = scene.choices[i];
+                    itemCount: _shuffledChoices[scene.id]!.length,
+itemBuilder: (ctx, i) {
+  final c = _shuffledChoices[scene.id]![i];
                       final res = _results[scene.id];
                       bool isSelected = _answers[scene.id] == c.id;
                       bool isCorrectChoice = c.consequenceType == 'correct';
@@ -686,29 +722,6 @@ class _TrainingRunnerScreenState extends State<TrainingRunnerScreen> {
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _submitting ? null : _submitAttempt,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: _submitting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.send),
                   ),
                 ],
               ),
