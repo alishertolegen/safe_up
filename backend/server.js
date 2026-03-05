@@ -7,7 +7,7 @@ const cors = require("cors");
 require("dotenv").config();
 const axios = require("axios");
 const crypto = require("crypto");
-const nodemailer = require("nodemailer");
+const SibApiV3Sdk = require('sib-api-v3-sdk');
 
 
 const app = express();
@@ -675,96 +675,51 @@ function validateEmail(rawEmail) {
   return errors;
 }
 async function sendConfirmEmail(toEmail, code) {
-  const from = process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@example.com';
-  const subject = 'Код подтверждения email';
-  const text = `Ваш код подтверждения: ${code}\n\nКод действителен 24 часа. Если вы не регистрировались — проигнорируйте это письмо.`;
-  const html = `<div style="font-family: Arial, sans-serif; padding:20px;">
-    <h2>Подтверждение email</h2>
-    <p>Здравствуйте!</p>
-    <p>Для завершения регистрации используйте код:</p>
-    <div style="font-size:24px; font-weight:bold; margin:16px 0; color:#2a7ae2;">${code}</div>
-    <p>Код действует 24 часа.</p>
-    <hr style="margin-top:20px;" />
-    <p style="color:#777; font-size:12px;">Письмо отправлено автоматически.</p>
-  </div>`;
+  const defaultClient = SibApiV3Sdk.ApiClient.instance;
+  defaultClient.authentications['api-key'].apiKey = process.env.BREVO_API_KEY;
 
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn(`SMTP not configured — confirm code for ${toEmail}: ${code}`);
-    return;
-  }
+  const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: Number(process.env.SMTP_PORT || 587) === 465,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+  await apiInstance.sendTransacEmail({
+    sender: { name: "SafeUpProduction", email: "alishertolegen1337@gmail.com" },
+    to: [{ email: toEmail }],
+    subject: "Код подтверждения email",
+    htmlContent: `<div style="font-family: Arial, sans-serif; padding:20px;">
+      <h2>Подтверждение email</h2>
+      <p>Здравствуйте!</p>
+      <p>Для завершения регистрации используйте код:</p>
+      <div style="font-size:24px; font-weight:bold; margin:16px 0; color:#2a7ae2;">${code}</div>
+      <p>Код действует 24 часа.</p>
+      <hr style="margin-top:20px;" />
+      <p style="color:#777; font-size:12px;">Письмо отправлено автоматически.</p>
+    </div>`
   });
-
-  const mailOptions = { from, to: toEmail, subject, text, html };
-  await transporter.sendMail(mailOptions);
 }
 // Отправка письма с кодом сброса пароля.
 async function sendResetEmail(toEmail, code) {
-  const from = process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@example.com';
-  const subject = 'Код для сброса пароля';
-  const text = `Ваш код для сброса пароля: ${code}\n\nОн действителен 15 минут. Если вы не запрашивали сброс — проигнорируйте это письмо.`;
-  const html = `<div style="font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px;">
-  <div style="max-width: 500px; margin: auto; background: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
-    <h2 style="color: #333; margin-bottom: 20px;">Сброс пароля</h2>
-    <p style="font-size: 15px; color: #444;">
-      Здравствуйте!
-    </p>
-    <p style="font-size: 15px; color: #444;">
-      Для завершения процедуры сброса пароля используйте следующий код:
-    </p>
+  const defaultClient = SibApiV3Sdk.ApiClient.instance;
+  defaultClient.authentications['api-key'].apiKey = process.env.BREVO_API_KEY;
 
-    <div style="text-align: center; margin: 25px 0;">
-      <div style="display: inline-block; font-size: 26px; font-weight: bold; color: #2a7ae2; padding: 12px 25px; border: 2px solid #2a7ae2; border-radius: 6px;">
-        ${code}
+  const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+
+  await apiInstance.sendTransacEmail({
+    sender: { name: "SafeUpProduction", email: "alishertolegen1337@gmail.com" },
+    to: [{ email: toEmail }],
+    subject: "Код для сброса пароля",
+    htmlContent: `<div style="font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px;">
+      <div style="max-width: 500px; margin: auto; background: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
+        <h2 style="color: #333;">Сброс пароля</h2>
+        <p style="color: #444;">Для завершения сброса используйте код:</p>
+        <div style="text-align:center; margin: 25px 0;">
+          <div style="display:inline-block; font-size:26px; font-weight:bold; color:#2a7ae2; padding:12px 25px; border:2px solid #2a7ae2; border-radius:6px;">
+            ${code}
+          </div>
+        </div>
+        <p style="color:#444;">Код действителен <b>15 минут</b>.</p>
+        <p style="color:#777; font-size:14px;">Если вы не запрашивали сброс — проигнорируйте письмо.</p>
       </div>
-    </div>
-
-    <p style="font-size: 15px; color: #444;">
-      Код действителен в течение <b>15 минут</b>.
-    </p>
-
-    <p style="font-size: 14px; color: #777; margin-top: 25px;">
-      Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо.
-    </p>
-
-    <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
-
-    <p style="font-size: 12px; color: #999; text-align: center;">
-      Это письмо отправлено автоматически. Пожалуйста, не отвечайте на него.
-    </p>
-  </div>
-</div>
-`;
-
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn(`SMTP not configured — reset code for ${toEmail}: ${code}`);
-    return;
-  }
-
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: Number(process.env.SMTP_PORT || 587) === 465, 
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
+    </div>`
   });
-
-  const mailOptions = {
-    from,
-    to: toEmail,
-    subject,
-    text,
-    html
-  };
-
-  await transporter.sendMail(mailOptions);
 }
 
 
@@ -836,7 +791,7 @@ app.post("/register", async (req, res) => {
     newUser.emailConfirmExpires = confirmExpires;
     await newUser.save();
 
-    // Отправляем письмо (лог в консоль при отсутствии SMTP)
+    // Отправляем письмо
     try {
       await sendConfirmEmail(emailNorm, confirmCode);
     } catch (mailErr) {
