@@ -36,7 +36,7 @@ List<dynamic> _filteredUsers = [];
       final token = prefs.getString('token');
 
       final res = await http.get(
-        Uri.parse('http://10.0.2.2:5000/users'),
+        Uri.parse('https://safe-up.onrender.com/users'),
         headers: {
           'Content-Type': 'application/json',
           if (token != null) 'Authorization': 'Bearer $token',

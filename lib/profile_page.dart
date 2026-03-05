@@ -46,7 +46,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   try {
     final res = await http.delete(
-      Uri.parse("http://10.0.2.2:5000/profile/avatar"),
+      Uri.parse("https://safe-up.onrender.com/profile/avatar"),
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer $token",
@@ -146,7 +146,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
 
       final res = await http.get(
-        Uri.parse("http://10.0.2.2:5000/profile"),
+        Uri.parse("https://safe-up.onrender.com/profile"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",

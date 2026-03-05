@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const String API_BASE = String.fromEnvironment(
   'API_BASE',
-  defaultValue: 'http://10.0.2.2:5000',
+  defaultValue: 'https://safe-up.onrender.com',
 );
 
 class AchievementsScreen extends StatefulWidget {

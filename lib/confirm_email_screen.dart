@@ -20,7 +20,7 @@ class _ConfirmEmailScreenState extends State<ConfirmEmailScreen> {
 
     try {
       final res = await http.post(
-        Uri.parse("http://10.0.2.2:5000/confirm-email"),
+        Uri.parse("https://safe-up.onrender.com/confirm-email"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": widget.email,
@@ -58,7 +58,7 @@ if (res.statusCode == 200) {
 
   Future<void> resendCode() async {
     await http.post(
-      Uri.parse("http://10.0.2.2:5000/resend-confirm"),
+      Uri.parse("https://safe-up.onrender.com/resend-confirm"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({"email": widget.email}),
     );

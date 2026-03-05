@@ -62,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final url = Uri.parse("http://10.0.2.2:5000/login");
+      final url = Uri.parse("https://safe-up.onrender.com/login");
 
       final response = await http.post(
         url,

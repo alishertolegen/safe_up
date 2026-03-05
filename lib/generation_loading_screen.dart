@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 
-const String apiBase = String.fromEnvironment('API_BASE', defaultValue: 'http://10.0.2.2:5000');
+const String apiBase = String.fromEnvironment('API_BASE', defaultValue: 'https://safe-up.onrender.com');
 
 class GenerationLoadingScreen extends StatefulWidget {
   final Map<String, dynamic> payload;

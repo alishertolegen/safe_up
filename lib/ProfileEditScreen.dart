@@ -65,7 +65,7 @@ final ImagePicker _picker = ImagePicker();
       }
 
       final res = await http.get(
-        Uri.parse("http://10.0.2.2:5000/profile"),
+        Uri.parse("https://safe-up.onrender.com/profile"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -160,7 +160,7 @@ avatarUrl = data["avatarUrl"] ?? data["avatar_url"] ?? "";
       };
 
       final res = await http.patch(
-        Uri.parse("http://10.0.2.2:5000/profile"),
+        Uri.parse("https://safe-up.onrender.com/profile"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -535,7 +535,7 @@ Future<void> _pickAndUpload() async {
     final token = prefs.getString("token");
     if (token == null) throw "Требуется авторизация";
 
-    final uri = Uri.parse("http://10.0.2.2:5000/profile/avatar");
+    final uri = Uri.parse("https://safe-up.onrender.com/profile/avatar");
     final req = http.MultipartRequest('POST', uri);
     req.headers['Authorization'] = 'Bearer $token';
     final bytes = await picked.readAsBytes();
