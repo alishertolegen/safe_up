@@ -16,7 +16,8 @@ class _RatingScreenState extends State<RatingScreen> {
   bool _visible = false;
   String? error;
   List<dynamic> users = [];
-
+  final TextEditingController _searchController = TextEditingController();
+List<dynamic> _filteredUsers = [];
   @override
   void initState() {
     super.initState();
@@ -98,8 +99,20 @@ class _RatingScreenState extends State<RatingScreen> {
     }
     users.sort((a, b) =>
         (b['_ratingScore'] as double).compareTo(a['_ratingScore'] as double));
+    _filteredUsers = List.from(users);
   }
-
+void _filterUsers(String query) {
+  setState(() {
+    if (query.isEmpty) {
+      _filteredUsers = List.from(users);
+    } else {
+      _filteredUsers = users.where((u) {
+        final name = (u['username'] ?? '').toString().toLowerCase();
+        return name.contains(query.toLowerCase());
+      }).toList();
+    }
+  });
+}
   int _toIntSafe(dynamic v) {
     if (v == null) return 0;
     if (v is int) return v;
@@ -508,7 +521,7 @@ class _RatingScreenState extends State<RatingScreen> {
   // ─── Top-3 podium ────────────────────────────────────────────────────────────
 
   Widget _buildPodium() {
-    if (users.length < 3) return const SizedBox.shrink();
+    if (_filteredUsers.length < 3) return const SizedBox.shrink();
 
     final medals = [
       {'index': 1, 'label': '2', 'height': 80.0, 'color': const Color(0xFFC0C0C0)},
@@ -583,7 +596,7 @@ class _RatingScreenState extends State<RatingScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: medals.map((m) {
               final idx = m['index'] as int;
-              final user = users[idx];
+              final user = _filteredUsers[idx];
               final avatar =
                   (user['avatarUrl'] ?? user['avatar_url'])?.toString() ?? '';
               final username = user['username'] ?? 'User';
@@ -912,7 +925,15 @@ class _RatingScreenState extends State<RatingScreen> {
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        title: const Text('Рейтинг'),
+        title: TextField(
+  controller: _searchController,
+  onChanged: _filterUsers,
+  decoration: InputDecoration(
+    hintText: 'Поиск по имени...',
+    border: InputBorder.none,
+    hintStyle: TextStyle(color: Colors.grey.shade400),
+  ),
+),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
@@ -993,10 +1014,10 @@ class _RatingScreenState extends State<RatingScreen> {
                                       padding:
                                           const EdgeInsets.only(bottom: 10),
                                       child: _buildUserTile(
-                                          users[index], index),
+                                          _filteredUsers[index], index),
                                     );
                                   },
-                                  childCount: users.length,
+                                  childCount: _filteredUsers.length,
                                 ),
                               ),
                             ),
@@ -1005,4 +1026,9 @@ class _RatingScreenState extends State<RatingScreen> {
             ),
     );
   }
+  @override
+void dispose() {
+  _searchController.dispose();
+  super.dispose();
+}
 }

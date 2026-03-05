@@ -56,14 +56,28 @@ class TrainingDetailScreen extends StatelessWidget {
         return const Icon(Icons.help_outline, size: 22);
     }
   }
+double _calculatePercent(Training t) {
+  // Если есть хотя бы 1 успешная попытка — фиксируем 100%
+  final successes = t.stats.successes;
+  if (successes != null && successes >= 1) return 100.0;
 
+  // Иначе безопасно берём последний известный процент
+  final dyn = t as dynamic;
+  try {
+    final cand = dyn.lastScorePercent ?? dyn.last_score_percent ?? dyn.lastScore ?? dyn.scorePercent;
+    if (cand is num) return cand.toDouble();
+    if (cand is String) return double.tryParse(cand) ?? 0.0;
+  } catch (_) {}
+
+  return 0.0;
+}
   @override
   Widget build(BuildContext context) {
     final createdAt = training.createdAt.toLocal().toString().split(' ').first;
     final updatedAt = training.updatedAt.toLocal().toString().split(' ').first;
     final difficultyColor = _getDifficultyColor(training.difficulty);
     final difficultyLabel = _getDifficultyLabel(training.difficulty);
-    final scoreColor = _getScoreColor(training.lastScorePercent);
+    final scoreColor = _getScoreColor(_calculatePercent(training));
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
@@ -188,7 +202,7 @@ class TrainingDetailScreen extends StatelessWidget {
                               child: Column(
                                 children: [
                                   Text(
-                                    '${training.lastScorePercent.toStringAsFixed(0)}%',
+                                    '${_calculatePercent(training).toStringAsFixed(0)}%',
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.w700,
@@ -351,10 +365,10 @@ class TrainingDetailScreen extends StatelessWidget {
                   // Scenes section
                   Row(
                     children: [
-                      Icon(Icons.movie, color: Colors.blue.shade700, size: 20),
+                      Icon(Icons.analytics, color: Colors.blue.shade700, size: 20),
                       const SizedBox(width: 8),
                       const Text(
-                        'Сцены',
+                        'Анализ',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -525,7 +539,7 @@ class TrainingDetailScreen extends StatelessWidget {
                               ),
                               const SizedBox(height: 12),
                               const Text(
-                                'Сцены заблокированы',
+                                'Анализ заблокирован',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
@@ -533,7 +547,7 @@ class TrainingDetailScreen extends StatelessWidget {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Пройдите тренировку хотя бы один раз, чтобы увидеть все сцены',
+                                'Пройдите тренировку успешно хотя бы один раз, чтобы получить анализ тренировки',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: Colors.grey.shade600,

@@ -69,10 +69,30 @@ app.post("/profile/avatar", authMiddleware, upload.single("avatar"), async (req,
     res.status(500).json({ message: "Ошибка загрузки аватара" });
   }
 });
+app.delete("/profile/avatar", authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: "Пользователь не найден" });
 
+    if (user.avatarUrl) {
+      const publicId = user.avatarUrl.split("/").pop().split(".")[0];
+      await cloudinary.uploader.destroy(`avatars/${publicId}`);
+      user.avatarUrl = "";
+      await user.save();
+    }
+
+    res.json({ message: "Аватар удалён" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Ошибка удаления аватара" });
+  }
+});
 
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
+  .then(async () => {
+    console.log("MongoDB connected");
+    await seedAchievements();
+  })
   .catch(err => console.error("MongoDB connection error:", err));
 
 /**
@@ -98,7 +118,7 @@ const userSchema = new mongoose.Schema({
   // ---- XP / Level ----
   xp: { type: Number, default: 0 },
   level: { type: Number, default: 1 },
-
+  completedTrainings: [{ type: mongoose.Schema.Types.ObjectId, ref: "Training" }],
   achievements: [
     {
       code: { type: String, required: true },
@@ -145,7 +165,36 @@ const achievementSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const Achievement = mongoose.model("Achievement", achievementSchema);
+const SEED_ACHIEVEMENTS = [
+  { code: "first_success",       title: "Первая успешная тренировка", description: "Успешно пройдена первая тренировка.",              points: 20  },
+  { code: "5_successes",         title: "Уверенный старт",            description: "Успешно пройдено 5 тренировок.",                   points: 30  },
+  { code: "10_successes",        title: "Опытный",                    description: "Успешно пройдено 10 тренировок.",                  points: 50  },
+  { code: "50_successes",        title: "Профи",                      description: "Успешно пройдено 50 тренировок.",                  points: 100 },
+  { code: "100_attempts",        title: "Не сдаюсь",                  description: "Совершено 100 попыток прохождения тренировок.",    points: 50  },
+  { code: "3_win_streak",        title: "Серия 3",                    description: "3 успешных прохождения подряд.",                   points: 20  },
+  { code: "5_win_streak",        title: "Серия 5",                    description: "5 успешных прохождений подряд.",                   points: 40  },
+  { code: "10_win_streak",       title: "Непобедимый",                description: "10 успешных прохождений подряд.",                  points: 80  },
+  { code: "perfect_run",         title: "Идеально",                   description: "Все ответы в тренировке правильные.",              points: 30  },
+  { code: "fast_thinker",        title: "Быстрое решение",            description: "Тренировка пройдена значительно быстрее среднего.", points: 25 },
+  { code: "risk_taker",          title: "Рискованный игрок",          description: "Накоплено 10 рискованных выборов.",                points: 15  },
+  { code: "safe_player",         title: "Осторожный",                 description: "10+ попыток без единого опасного выбора.",         points: 40  },
+  { code: "comeback",            title: "Вторая попытка",             description: "Пройдена тренировка, в которой раньше была ошибка.", points: 20 },
+  { code: "achievement_hunter",  title: "Охотник за достижениями",    description: "Получено 10 и более достижений.",                  points: 50  },
+  { code: "all_wrong",           title: "Антигерой",                  description: "Все ответы в тренировке оказались неверными.",     points: 5, hidden: true },
+];
 
+async function seedAchievements() {
+  let created = 0;
+  for (const data of SEED_ACHIEVEMENTS) {
+    const exists = await Achievement.findOne({ code: data.code });
+    if (!exists) {
+      await Achievement.create(data);
+      created++;
+    }
+  }
+  if (created > 0) console.log(`[seed] Добавлено ${created} достижений в БД.`);
+  else console.log("[seed] Все достижения уже в БД — ничего не изменилось.");
+}
 const trainingSchema = new mongoose.Schema({
   title: { type: String, required: true },
   summary: String,
@@ -1320,6 +1369,14 @@ app.post("/trainings/:id/attempt", authMiddleware, async (req, res) => {
 
     const user = await User.findById(req.userId);
     if (user) {
+      const alreadyCompleted = (user.completedTrainings || [])
+  .some(id => String(id) === String(training._id));
+
+if (!alreadyCompleted) {
+  user.completedTrainings = user.completedTrainings || [];
+  user.completedTrainings.push(training._id);
+}
+if (!alreadyCompleted) {
       // старая статистика
       const uStats = user.stats || {
         totalAttempts: 0,
@@ -1432,17 +1489,6 @@ try {
         await giveAchievementToUser(user, 'safe_player', 'Осторожный');
       }
 
-      // 9) comeback — если ранее была неудачная попытка по этому тренингу, а теперь success
-      if (success) {
-        user.stats.failedTrainings = user.stats.failedTrainings || [];
-        const idx = (user.stats.failedTrainings || []).findIndex(id => String(id) === String(training._id));
-        if (idx !== -1) {
-          // выдаём и удаляем из failedTrainings
-          await giveAchievementToUser(user, 'comeback', 'Вторая попытка');
-          user.stats.failedTrainings.splice(idx, 1);
-        }
-      }
-
       // 10) meta: achievement_hunter — когда у пользователя >= 10 достижений
       const achCount = (user.achievements || []).length;
       if (achCount >= 10) {
@@ -1452,8 +1498,20 @@ try {
 if (details.length > 0 && correctInAttempt === 0) {
   await giveAchievementToUser(user, 'all_wrong', 'Антигерой');
 }
-      // сохраняем пользователя
+ 
+// сохраняем пользователя
       await user.save();
+}
+// comeback — вне блока, работает при любой попытке
+    if (success) {
+      user.stats.failedTrainings = user.stats.failedTrainings || [];
+      const idx = user.stats.failedTrainings.findIndex(id => String(id) === String(training._id));
+      if (idx !== -1) {
+        await giveAchievementToUser(user, 'comeback', 'Вторая попытка');
+        user.stats.failedTrainings.splice(idx, 1);
+        await user.save();
+      }
+    }
     }
 
     // Ответ клиенту

@@ -39,7 +39,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String _two(int n) => n.toString().padLeft(2, '0');
+  Future<void> deleteAvatar() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString("token");
+  if (token == null) return;
 
+  try {
+    final res = await http.delete(
+      Uri.parse("http://10.0.2.2:5000/profile/avatar"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+    );
+
+    if (res.statusCode == 200 && mounted) {
+      setState(() => avatarUrl = "");
+    }
+  } catch (e) {
+    // silent
+  }
+}
   String formatIso(String? iso) {
     if (iso == null || iso.isEmpty) return "-";
     try {
@@ -266,56 +286,92 @@ lastActiveStr = formatPretty(data["lastActiveAt"] ?? data["last_active_at"] ?? d
                         child: Column(
                           children: [
                             // Avatar with border and level badge
-                            Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 3),
-                                  ),
-                                  child: CircleAvatar(
-                                    radius: 50,
-                                    backgroundColor: Colors.white,
-                                    backgroundImage: (avatarUrl != null && avatarUrl!.isNotEmpty)
-                                        ? NetworkImage(avatarUrl!)
-                                        : null,
-                                    child: (avatarUrl == null || avatarUrl!.isEmpty)
-                                        ? Icon(Icons.person, size: 50, color: Colors.blue)
-                                        : null,
-                                  ),
-                                ),
-                                // Level badge (top-right)
-                                Positioned(
-                                  right: 0,
-                                  bottom: 0,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(20),
-                                      boxShadow: [
-                                        BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 6),
-                                      ],
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.shield, size: 16, color: Colors.blue.shade700),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          "Lv $level",
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.blue.shade700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                )
-                              ],
-                            ),
+Stack(
+  alignment: Alignment.center,
+  children: [
+    Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 3),
+      ),
+      child: CircleAvatar(
+        radius: 50,
+        backgroundColor: Colors.white,
+        backgroundImage: (avatarUrl != null && avatarUrl!.isNotEmpty)
+            ? NetworkImage(avatarUrl!)
+            : null,
+        child: (avatarUrl == null || avatarUrl!.isEmpty)
+            ? Icon(Icons.person, size: 50, color: Colors.blue)
+            : null,
+      ),
+    ),
+    // Кнопка удаления — только если аватар есть
+    if (avatarUrl != null && avatarUrl!.isNotEmpty)
+      Positioned(
+        top: 0,
+        right: 0,
+        child: GestureDetector(
+          onTap: () async {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text("Удалить аватар?"),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text("Отмена"),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text("Удалить",
+                        style: TextStyle(color: Colors.red)),
+                  ),
+                ],
+              ),
+            );
+            if (confirm == true) await deleteAvatar();
+          },
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: const BoxDecoration(
+              color: Colors.red,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.close, size: 16, color: Colors.white),
+          ),
+        ),
+      ),
+    // Level badge остаётся как был
+    Positioned(
+      right: 0,
+      bottom: 0,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 6),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.shield, size: 16, color: Colors.blue.shade700),
+            const SizedBox(width: 6),
+            Text(
+              "Lv $level",
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.blue.shade700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  ],
+),
                             const SizedBox(height: 16),
                             Text(
                               name.isNotEmpty ? name : "Имя не указано",
