@@ -1043,12 +1043,13 @@ app.post("/reset-password", async (req, res) => {
 });
 
 
-app.get("/users", async(req, res) =>{
-  try{
-    const users = await User.find({}, "-password");
+app.get("/users", async (req, res) => {
+  try {
+    // исключаем password и email
+    const users = await User.find({}, "-password -email");
     res.json(users);
-  }catch(err){
-    res.status(500).json({message: "Ошибка при получении пользователей"});
+  } catch (err) {
+    res.status(500).json({ message: "Ошибка при получении пользователей" });
   }
 });
 

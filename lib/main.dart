@@ -149,7 +149,7 @@ class StartApp extends StatelessWidget {
                         Icons.list_alt,
                         color: Colors.blue.shade600,
                       ),
-                      label: 'Тренировки',
+                      label: 'Мои',
                     ),
                     NavigationDestination(
                       icon: Icon(

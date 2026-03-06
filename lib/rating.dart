@@ -24,53 +24,58 @@ List<dynamic> _filteredUsers = [];
     fetchUsers();
   }
 
-  Future<void> fetchUsers() async {
-    setState(() {
-      isLoading = true;
-      error = null;
-      _visible = false;
-    });
+Future<void> fetchUsers() async {
+  if (!mounted) return; // guard at entry
+  setState(() {
+    isLoading = true;
+    error = null;
+    _visible = false;
+  });
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
 
-      final res = await http.get(
-        Uri.parse('https://safe-up.onrender.com/users'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-      );
+    final res = await http.get(
+      Uri.parse('https://safe-up.onrender.com/users'),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+    );
 
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        if (data is List) {
-          users = List.from(data);
-          _normalizeAndSortUsers();
-          setState(() => isLoading = false);
-          Future.delayed(const Duration(milliseconds: 100), () {
-            if (mounted) setState(() => _visible = true);
-          });
-        } else {
-          setState(() {
-            isLoading = false;
-            error = 'Неверный формат ответа от сервера';
-          });
-        }
+    if (!mounted) return; // ← guard after every await
+
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      if (data is List) {
+        users = List.from(data);
+        _normalizeAndSortUsers();
+        if (!mounted) return;
+        setState(() => isLoading = false);
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) setState(() => _visible = true); // already correct
+        });
       } else {
         setState(() {
           isLoading = false;
-          error = 'Ошибка сервера: ${res.statusCode}';
+          error = 'Неверный формат ответа от сервера';
         });
       }
-    } catch (e) {
+    } else {
       setState(() {
         isLoading = false;
-        error = 'Сбой сети: $e';
+        error = 'Ошибка сервера: ${res.statusCode}';
       });
     }
+  } catch (e) {
+    if (!mounted) return; // ← guard in catch too
+    setState(() {
+      isLoading = false;
+      error = 'Сбой сети: $e';
+    });
   }
+}
 
   void _normalizeAndSortUsers() {
     for (var u in users) {
