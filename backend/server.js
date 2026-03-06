@@ -25,6 +25,9 @@ cloudinary.config({
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
 app.post("/profile/avatar", authMiddleware, upload.single("avatar"), async (req, res) => {
   try {
     if (!req.file) {
